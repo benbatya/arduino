@@ -33,7 +33,7 @@ void setup()
 //            _BV(ADATE) | // Auto trigger
 ////          _BV(ADIE)  | // Interrupt enable
 //            _BV(ADPS1) | _BV(ADPS0); // 64:1 / 13 = 9615 Hz
-//  ADCSRA |= _BV(ADPS2) | _BV(ADPS0);
+//  ADCSRA |= _BV(ADPS0); // | _BV(ADPS0);
 }
 
 //FPSCounter counter("loop");
@@ -51,23 +51,18 @@ static const uint8_t PROGMEM
                 70,70,70,70,70,70,70,70,70,70,80,70,70,70,70,70,
                 96,106,90,70,70,70,70,70,70,70,70,70,70,70,70,70,
                 70,70,70,70,70,70,70,70,70,70,80,86,80,70,70,70,
-                70,105,110,85,70,70,70,70,70,70,70,70,70,70,70,70,
+                70,105,110,95,70,70,70,70,70,70,70,70,70,70,70,70,
                 70,70,70,70,70,70,70,70,70,70,70,90,90,80,70,70,
-                70,70,105,105,80,70,70,70,70,70,70,70,70,70,70,70,
-                70,70,70,70,70,70,70,70,70,70,70,70,95,100,70,70};
+                70,70,105,105,90,70,70,70,70,70,70,70,70,70,70,70,
+                70,70,70,70,70,70,70,70,70,70,70,85,95,100,70,70};
+
+uint16_t amplitude();
 
 void loop() 
-{ 
-//  static uint16_t count = 0;
-//  static uint32_t total_time = 0;
-    
-//  uint32_t start = micros(); // This uses timer0
-    
-    memset(vals, sizeof(vals), 0);
-
+{  
     while (1) // reduces jitter
     {
-        cli();  // UDRE interrupt slows this way down on arduino1.0
+//      cli();  // UDRE interrupt slows this way down on arduino1.0
         for (int i = 0; i < FFT_N * 2; i += 2) // save FFT_N samples
         {
 //          while (!(ADCSRA & 0x10)); // wait for adc to be ready
@@ -76,8 +71,10 @@ void loop()
 //          uint8_t j = ADCH;
 //          int16_t k = (j << 8) | m; // form into an int
 
-            static const int16_t noiseThreshold = 4;
             int16_t k = analogRead(MIC_PIN);
+//          int16_t k = amplitude();
+
+            static const int16_t noiseThreshold = 4;
             k = ((k > (512-noiseThreshold)) &&
                  (k < (512+noiseThreshold))) ? 0 :
                     k - 512; // Sign-convert for FFT; -512 to +511
@@ -89,7 +86,7 @@ void loop()
         fft_reorder(); // reorder the data before doing the fft
         fft_run(); // process the data in the fft
         fft_mag_log(); // take the output of the fft
-        sei();
+//      sei();
         
         static uint8_t prev_values[FFT_N/2] = {0};
         static uint8_t output[FFT_N/2];
@@ -100,48 +97,44 @@ void loop()
             uint8_t L = pgm_read_byte(&noise[i]);
             fft_log_out[i] = (fft_log_out[i] <= L) ? 0 : fft_log_out[i];
             int8_t diff = int8_t(fft_log_out[i]) - prev_values[i]; // get the difference
-            output[i] = (diff > 70) ? 0: fft_log_out[i];  // make sure that the difference between the 
+            output[i] = (diff > 70) ? 0: fft_log_out[i];  // make sure that the difference between the
         }
 
         memcpy(prev_values, fft_log_out, FFT_N/2);
 
-//      static bins[3] = { 0 };
-//
-//      for (int i=0; i<3; i++)
-//      {
-//          bins[i] = 0;
-//      }
-//
-//      int8_t current_bin = -1;
-//      for (int i=0; i<FFT_N/2; i++)
-//      {
-//          uint8_t val = output[i];
-//          for (int j=0; j<8; j++)
-//          {
-//              if (val >= (1<<j))
-//              {
-//                  bins[current_bin] += 1;
-//              }
-//              else
-//              {
-//                  break;
-//              }
-//          }
-//
-//          if (i%86 == 85)
-//          {
-//              current_bin++;
-//          }
-//      }
-
         Serial.write(255); // send a start byte
+//      Serial.write(fft_log_out, FFT_N/2); // send out the data
         Serial.write(output, FFT_N/2); // send out the data
         Serial.flush();
-
-//      Serial.println(val);
-//      delay(200);
     }
 }
 
+uint16_t amplitude()
+{
+    static const uint16_t sampleWindow = 50; // Sample window width in mS (50 mS = 20Hz)
+    uint32_t startMillis = micros();  // Start of sample window
 
+    uint16_t signalMax = 0;
+    uint16_t signalMin = 1024;
+
+    // collect data for 50 mS
+    while (micros() - startMillis < sampleWindow)
+    {
+        uint16_t sample = analogRead(MIC_PIN);
+        if (sample < 1024)  // toss out spurious readings
+        {
+            if (sample > signalMax)
+            {
+                signalMax = sample;  // save just the max levels
+            }
+            else if (sample < signalMin)
+            {
+                signalMin = sample;  // save just the min levels
+            }
+        }
+    }
+
+    uint16_t peakToPeak = signalMax - signalMin;  // max - min = peak-peak amplitude
+    return peakToPeak;
+}
 
