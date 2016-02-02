@@ -43,7 +43,7 @@
                 SaveOption="SaveWorkspaceFiles"
                 RunFromDir="%rw"
                 ClearProcessBuffer="1">
-                <Exec CmdLine="platformio run"/>
+                <Exec CmdLine="platformio run -e tie"/>
             </Target>
             <Target
                 Name="Rebuild"
@@ -137,7 +137,7 @@
                 SaveOption="SaveWorkspaceFiles"
                 RunFromDir="%rw"
                 ClearProcessBuffer="1">
-                <Exec CmdLine="platformio run"/>
+                <Exec CmdLine="platformio run -e tie"/>
             </Target>
             <Target
                 Name="Rebuild"
@@ -203,8 +203,8 @@
         <Folder
             Name="Header Files"
             Filters="*.h;*.H;*.hh;*.hpp;*.hxx;*.inc;*.sh;*.cpy;*.if">
+            <F N="lib/FFT/FFT.h"/>
             <F N="src/fps_counter.hpp"/>
-            <F N="../FrequencyTimer2/FrequencyTimer2.h"/>
         </Folder>
         <Folder
             Name="Resource Files"
