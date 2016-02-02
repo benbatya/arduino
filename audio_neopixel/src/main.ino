@@ -185,7 +185,7 @@ uint32_t simple_map_fft_to_color()
 
 uint16_t amplitude()
 {
-    static const uint16_t sampleWindow = 10; // Sample window width in mS (50 mS = 20Hz)
+    static const uint16_t sampleWindow = 50; // Sample window width in mS (50 mS = 20Hz)
     uint32_t startMillis = millis();  // Start of sample window
 
     uint16_t signalMax = 0;
