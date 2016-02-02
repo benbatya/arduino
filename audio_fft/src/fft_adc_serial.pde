@@ -20,25 +20,20 @@ void setup()
 //  pinMode(LED_PIN, OUTPUT);
 //  Serial.begin(9600);
     Serial.begin(115200); // use the serial port
+
+    analogReference(DEFAULT);
 //  TIMSK0 = 0; // turn off timer0 for lower jitter
 //  ADCSRA = 0xe5; // set adc on, set the adc to free running mode, prescaler=32
-//  ADMUX = (0x42); // use adc13
-//  DIDR2 = 1<<2; // turn off the digital input for adc2
-    
-//  ADCSRA = 0;
-//  ADCSRB = 0;
-//
-//  ADMUX = 0;
-//
-//  ADMUX |= (1 << REFS0); //set reference voltage
-//  ADMUX |= (1 << ADLAR); //left align the ADC value- so we can read highest 8 bits from ADCH register only
-//
-//  ADMUX |= (1 << 1); //
-//
-//  ADCSRA |= (1 << ADPS2) | (1 << ADPS0); //set ADC clock with 32 prescaler- 16mHz/32=500kHz
-//  ADCSRA |= (1 << ADATE); //enabble auto trigger
-//  ADCSRA |= (1 << ADEN); //enable ADC
-//  ADCSRA |= (1 << ADSC); //start ADC measurements
+
+//    ADMUX  = _BV(REFS0) | (MIC_PIN - 8);
+//    ADCSRB = _BV(MUX5);
+//    DIDR2 = 1<<(MIC_PIN-8); // turn off the digital input for adc2
+//    ADCSRA = _BV(ADEN)  | // ADC enable
+//            _BV(ADSC)  | // ADC start
+//            _BV(ADATE) | // Auto trigger
+////          _BV(ADIE)  | // Interrupt enable
+//            _BV(ADPS1) | _BV(ADPS0); // 64:1 / 13 = 9615 Hz
+//  ADCSRA |= _BV(ADPS2) | _BV(ADPS0);
 }
 
 //FPSCounter counter("loop");
@@ -50,6 +45,17 @@ static uint16_t val_index = 0;
 
 uint8_t log2x16(uint16_t x);
 
+static const uint8_t PROGMEM
+  // This is low-level noise that's subtracted from each FFT output column:
+  noise[128]={  100,90,80,80,80,80,80,80,80,80,80,70,70,70,70,70,
+                70,70,70,70,70,70,70,70,70,70,80,70,70,70,70,70,
+                96,106,90,70,70,70,70,70,70,70,70,70,70,70,70,70,
+                70,70,70,70,70,70,70,70,70,70,80,86,80,70,70,70,
+                70,105,110,85,70,70,70,70,70,70,70,70,70,70,70,70,
+                70,70,70,70,70,70,70,70,70,70,70,90,90,80,70,70,
+                70,70,105,105,80,70,70,70,70,70,70,70,70,70,70,70,
+                70,70,70,70,70,70,70,70,70,70,70,70,95,100,70,70};
+
 void loop() 
 { 
 //  static uint16_t count = 0;
@@ -59,11 +65,9 @@ void loop()
     
     memset(vals, sizeof(vals), 0);
 
-//  static uint8_t temp_buf[FFT_N/2];
-
     while (1) // reduces jitter
     {
-//      cli();  // UDRE interrupt slows this way down on arduino1.0
+        cli();  // UDRE interrupt slows this way down on arduino1.0
         for (int i = 0; i < FFT_N * 2; i += 2) // save FFT_N samples
         {
 //          while (!(ADCSRA & 0x10)); // wait for adc to be ready
@@ -71,30 +75,67 @@ void loop()
 //          uint8_t m = ADCL; // fetch adc data
 //          uint8_t j = ADCH;
 //          int16_t k = (j << 8) | m; // form into an int
+
+            static const int16_t noiseThreshold = 4;
             int16_t k = analogRead(MIC_PIN);
-            k -= 0x0200; // form into a signed int
+            k = ((k > (512-noiseThreshold)) &&
+                 (k < (512+noiseThreshold))) ? 0 :
+                    k - 512; // Sign-convert for FFT; -512 to +511
             k <<= 6; // form into a 16b signed int
             fft_input[i] = k; // put real data into even bins
             fft_input[i + 1] = 0; // set odd bins to 0
-
-//          temp_buf[i/4] = j;
         }
         fft_window(); // window the data for better frequency response
         fft_reorder(); // reorder the data before doing the fft
         fft_run(); // process the data in the fft
         fft_mag_log(); // take the output of the fft
-//      sei();
+        sei();
         
+        static uint8_t prev_values[FFT_N/2] = {0};
+        static uint8_t output[FFT_N/2];
 
+        for (int i=0; i<FFT_N/2; i++)
+        {
+            // Do a temporal filter operation
+            uint8_t L = pgm_read_byte(&noise[i]);
+            fft_log_out[i] = (fft_log_out[i] <= L) ? 0 : fft_log_out[i];
+            int8_t diff = int8_t(fft_log_out[i]) - prev_values[i]; // get the difference
+            output[i] = (diff > 70) ? 0: fft_log_out[i];  // make sure that the difference between the 
+        }
+
+        memcpy(prev_values, fft_log_out, FFT_N/2);
+
+//      static bins[3] = { 0 };
+//
+//      for (int i=0; i<3; i++)
+//      {
+//          bins[i] = 0;
+//      }
+//
+//      int8_t current_bin = -1;
 //      for (int i=0; i<FFT_N/2; i++)
 //      {
-//          uint8_t val = fft_lin_out[i]>>8;
-//          temp_buf[i] = uint8_t(val);
+//          uint8_t val = output[i];
+//          for (int j=0; j<8; j++)
+//          {
+//              if (val >= (1<<j))
+//              {
+//                  bins[current_bin] += 1;
+//              }
+//              else
+//              {
+//                  break;
+//              }
+//          }
+//
+//          if (i%86 == 85)
+//          {
+//              current_bin++;
+//          }
 //      }
 
         Serial.write(255); // send a start byte
-        Serial.write(fft_log_out, FFT_N/2); // send out the data
-//      Serial.write(temp_buf, FFT_N/2);
+        Serial.write(output, FFT_N/2); // send out the data
         Serial.flush();
 
 //      Serial.println(val);
@@ -102,60 +143,5 @@ void loop()
     }
 }
 
-int16_t adjust_val(int16_t val)
-{
-    vals[val_index] = val;
-    val_index = (val_index+1) % NUM_VALUES;
 
-    // Use self adjusting values
-    int16_t max_val = 0xffff;
-    int16_t min_val = -max_val;
-    int16_t range = 0;
-
-    for (int i=0; i<NUM_VALUES; i++) 
-    {
-        int16_t val = vals[i];
-        if (val < min_val) 
-        {
-            min_val = val;
-            range = max_val - min_val;
-        }
-        if (val > max_val) 
-        {
-            max_val = val;
-            range = max_val - min_val;
-        }
-    }
-
-    // check for a valid scale
-    if (range <= 0) 
-    {
-        return TIME_DELAY;
-    }
-
-    val = (val - min_val) * TIME_DELAY / range;
-
-    return val;
-}
-
-// From http://www.avrfreaks.net/comment/567704#comment-567704
-// Table 16*(Log2(1) thru Log2(2)), 16 values
-static const uint8_t Log2Table[16]={ 0,2,3,4,5,6,7,8,9,10,11,12,13,14,14,15 }; 
-
-// Log2(x)*16 , so log2x16(65535) = 255
-uint8_t log2x16(uint16_t x){
-    int8_t v;
-    if(x<2) return 0;
-    v=240; // 16*log2(2^15)=240
-    // shift until most significant bit is set,
-    // each bit-shift results in log += 16
-    while ((x&0x8000)==0) { 
-        x=x<<1 ; v -= 16;
-    }
-    // x has now form 1iii ixxx xxxx xxxx
-    // get the next 4 bits =iiii and address table with it
-    uint8_t i=(x>>11) & 0xf ;
-    v += Log2Table[i] ;
-    return v ;
-}
 
