@@ -43,6 +43,9 @@ enum class MODE : byte
 
 static MODE current_mode = MODE::FFT;
 
+static int32_t prev_time;
+static uint8_t color_weights[9];
+
 void setup() 
 { 
 //  pinMode(LED_PIN, OUTPUT);
@@ -90,27 +93,6 @@ void setup()
         EEPROM.write(EEPROM_address, byte(current_mode));
     }
 
-}
-
-// This is low-level noise that's subtracted from each FFT output column:
-static const uint8_t PROGMEM noise[128]=
-  // This is low-level noise that's subtracted from each FFT output column:
-{  100,90,80,80,80,80,80,80,80,80,80,70,70,70,70,70,
-    70,70,70,70,70,70,70,70,70,70,80,70,70,70,70,70,
-    96,106,90,70,70,70,70,70,70,70,70,70,70,70,70,70,
-    70,70,70,70,70,70,70,70,70,70,80,86,80,70,70,70,
-    70,105,110,95,70,70,70,70,70,70,70,70,70,70,70,70,
-    70,70,70,70,70,70,70,70,70,70,70,90,90,80,70,70,
-    70,70,105,105,90,70,70,70,70,70,70,70,70,70,70,70,
-    70,70,70,70,70,70,70,70,70,70,70,85,95,100,70,70};
-
-static uint8_t color_weights[9];
-
-uint32_t fft_to_color();
-uint32_t amp_to_color();
-
-void loop() 
-{   
     // Show a red pixel for 2 seconds if we are displaying AMP mode
     switch (current_mode) 
     {
@@ -127,62 +109,98 @@ void loop()
     strip.show();
     delay(2000);
 
-    uint16_t prev_time = millis();
-    
-    // Change the color weights
+    prev_time = millis();
+
+    // Init the color weights
     for (int i=0; i<9; i++) 
     {
         color_weights[i] = random(256);
     }
+}
 
-    while (1) // reduces jitter
+void flow_modes();
+
+void loop() 
+{   
+    switch (current_mode) 
     {
-        uint32_t color;
+    case MODE::FFT:
+    case MODE::AMP:
+        flow_modes(); 
+        break;
+    default:
+        return;
+    }
+}
 
-        if (1) 
+
+uint32_t fft_to_color();
+uint32_t amp_to_color();
+
+void flow_modes()
+{
+    uint32_t color;
+
+    switch (current_mode) 
+    {
+    case MODE::FFT:
+        color = fft_to_color();
+        break;
+    case MODE::AMP:
+        color = amp_to_color();
+        break;
+    default:
+        return;
+    }
+
+    static uint32_t prev_colors[PIXEL_COUNT] = {0};
+    // move each color down
+    for (uint16_t i=0; i<PIXEL_COUNT-1; i++)
+    {
+        prev_colors[i] = prev_colors[i+1];
+    }
+    prev_colors[PIXEL_COUNT-1] = color;
+    // update the pixel colors
+    for (uint16_t i=0; i<PIXEL_COUNT; i++) 
+    {
+        strip.setPixelColor(i, prev_colors[i]);
+    }
+    strip.show();
+
+    uint16_t new_time = millis();
+
+    // Switch every 20sec
+    if ((new_time - prev_time) > 5000)
+    {
+        // Change the color weights
+        for (int i=0; i<9; i++) 
         {
-            color = fft_to_color();
-        }
-        else
-        {
-            color = amp_to_color();
+            color_weights[i] = random(256);
         }
 
-        static uint32_t prev_colors[PIXEL_COUNT] = {0};
-        // move each color down
-        for (uint16_t i=0; i<PIXEL_COUNT-1; i++)
-        {
-            prev_colors[i] = prev_colors[i+1];
-        }
-        prev_colors[PIXEL_COUNT-1] = color;
-        // update the pixel colors
-        for (uint16_t i=0; i<PIXEL_COUNT; i++) 
-        {
-            strip.setPixelColor(i, prev_colors[i]);
-        }
-        strip.show();
-
-        uint16_t new_time = millis();
-
-        // Switch every 20sec
-        if ((new_time - prev_time) > 5000)
-        {
-            // Change the color weights
-            for (int i=0; i<9; i++) 
-            {
-                color_weights[i] = random(256);
-            }
-
-            prev_time = new_time;
-        }
+        prev_time = new_time;
+    }
 
 //      Serial.write(255); // send a start byte
 //      Serial.write(bins, 3); // send out the data
 //      Serial.flush();
 
 //      delay(200);
-    }
 }
+
+// start Mode::FFT functionality
+
+// This is low-level noise that's subtracted from each FFT output column:
+static const uint8_t PROGMEM noise[128]=
+  // This is low-level noise that's subtracted from each FFT output column:
+{  100,90,80,80,80,80,80,80,80,80,80,70,70,70,70,70,
+    70,70,70,70,70,70,70,70,70,70,80,70,70,70,70,70,
+    96,106,90,70,70,70,70,70,70,70,70,70,70,70,70,70,
+    70,70,70,70,70,70,70,70,70,70,80,86,80,70,70,70,
+    70,105,110,95,70,70,70,70,70,70,70,70,70,70,70,70,
+    70,70,70,70,70,70,70,70,70,70,70,90,90,80,70,70,
+    70,70,105,105,90,70,70,70,70,70,70,70,70,70,70,70,
+    70,70,70,70,70,70,70,70,70,70,70,85,95,100,70,70};
 
 uint32_t fft_to_color()
 {
@@ -259,6 +277,7 @@ uint32_t fft_to_color()
     return new_color;
 }
 
+// start Mode::AMP functionality
 
 uint16_t amplitude()
 {
@@ -341,13 +360,15 @@ uint32_t amp_to_color()
     }
 
     uint16_t w = uint16_t(temp);
-    uint16_t r = (w*color_weights[0] + w*color_weights[1] + w*color_weights[2]) / 256;
-    uint16_t g = (w*color_weights[3] + w*color_weights[4] + w*color_weights[5]) / 256;
-    uint16_t b = (w*color_weights[6] + w*color_weights[7] + w*color_weights[8]) / 256;
+//  uint16_t r = (w*color_weights[0] + w*color_weights[1] + w*color_weights[2]) / 256;
+//  uint16_t g = (w*color_weights[3] + w*color_weights[4] + w*color_weights[5]) / 256;
+//  uint16_t b = (w*color_weights[6] + w*color_weights[7] + w*color_weights[8]) / 256;
 
 //  Serial.print("final = "); Serial.println(g);
 
-    return Adafruit_NeoPixel::Color(r, g, b);
+//  return Adafruit_NeoPixel::Color(uint8_t(r), uint8_t(g), uint8_t(b));
+    return Adafruit_NeoPixel::Color(uint8_t(w), uint8_t(w), uint8_t(w));
 }
 
+// start MODE::VU code
 
