@@ -53,21 +53,32 @@ void setup()
     strip.begin();
     strip.show(); // Initialize all pixels to 'off'
 
+    // Seed with random
+    randomSeed(analogRead(0));
 }
 
-static const uint8_t PROGMEM
-  // This is low-level noise that's subtracted from each FFT output column:
-  noise[128]={  100,90,80,80,80,80,80,80,80,80,80,70,70,70,70,70,
-                70,70,70,70,70,70,70,70,70,70,80,70,70,70,70,70,
-                96,106,90,70,70,70,70,70,70,70,70,70,70,70,70,70,
-                70,70,70,70,70,70,70,70,70,70,80,86,80,70,70,70,
-                70,105,110,85,70,70,70,70,70,70,70,70,70,70,70,70,
-                70,70,70,70,70,70,70,70,70,70,70,90,90,80,70,70,
-                70,70,105,105,80,70,70,70,70,70,70,70,70,70,70,70,
-                70,70,70,70,70,70,70,70,70,70,70,70,95,100,70,70};
+// This is low-level noise that's subtracted from each FFT output column:
+static const uint8_t PROGMEM noise[128]=
+{  100,90,80,80,80,80,80,80,80,80,80,70,70,70,70,70,
+    70,70,70,70,70,70,70,70,70,70,80,70,70,70,70,70,
+    96,106,90,70,70,70,70,70,70,70,70,70,70,70,70,70,
+    70,70,70,70,70,70,70,70,70,70,80,86,80,70,70,70,
+    70,105,110,85,70,70,70,70,70,70,70,70,70,70,70,70,
+    70,70,70,70,70,70,70,70,70,70,70,90,90,80,70,70,
+    70,70,105,105,80,70,70,70,70,70,70,70,70,70,70,70,
+    70,70,70,70,70,70,70,70,70,70,70,70,95,100,70,70};
 
 void loop() 
 {   
+    uint16_t prev_time = millis();
+
+    static uint8_t color_weights[9];
+    // Change the color weights
+    for (int i=0; i<9; i++) 
+    {
+        color_weights[i] = random(256);
+    }
+
     while (1) // reduces jitter
     {
         cli();  // UDRE interrupt slows this way down on arduino1.0
@@ -102,7 +113,7 @@ void loop()
 
         memcpy(prev_values, fft_log_out, FFT_N/2);
 
-        static uint8_t bins[3] = { 0 };
+        static uint16_t bins[3] = { 0 };
 
         for (int i=0; i<3; i++)
         {
@@ -119,7 +130,7 @@ void loop()
             {
                 if (val >= (1<<j))
                 {
-                    if (bins[current_bin] < 255) 
+                    if (bins[current_bin] < 256) 
                     {
                         bins[current_bin]++; 
                     }
@@ -137,7 +148,11 @@ void loop()
             }
         }
 
-        uint32_t new_color = Adafruit_NeoPixel::Color(bins[0], bins[1], bins[2]);
+        uint16_t r = (bins[0]*color_weights[0] + bins[1]*color_weights[1] + bins[2]*color_weights[2]) / 256;
+        uint16_t g = (bins[0]*color_weights[3] + bins[1]*color_weights[4] + bins[2]*color_weights[5]) / 256;
+        uint16_t b = (bins[0]*color_weights[6] + bins[1]*color_weights[7] + bins[2]*color_weights[8]) / 256;
+
+        uint32_t new_color = Adafruit_NeoPixel::Color(uint8_t(r), uint8_t(g), uint8_t(b));
 
         static uint32_t prev_colors[PIXEL_COUNT] = {0};
         // move each color down
@@ -152,6 +167,20 @@ void loop()
             strip.setPixelColor(i, prev_colors[i]);
         }
         strip.show();
+
+        uint16_t new_time = millis();
+
+        // Switch every 20sec
+        if ((new_time - prev_time) > 5000)
+        {
+            // Change the color weights
+            for (int i=0; i<9; i++) 
+            {
+                color_weights[i] = random(256);
+            }
+
+            prev_time = new_time;
+        }
 
 
 //      Serial.write(255); // send a start byte
