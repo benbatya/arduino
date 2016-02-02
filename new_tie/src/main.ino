@@ -9,6 +9,8 @@
 
 #include <Adafruit_NeoPixel.h>
 
+#include <EEPROM.h>
+
 #ifndef MIC_PIN
 #   define MIC_PIN 2
 #endif 
@@ -29,6 +31,17 @@
 //   NEO_KHZ400  400 KHz bitstream (e.g. FLORA pixels)
 //   NEO_KHZ800  800 KHz bitstream (e.g. High Density LED strip), correct for neopixel stick
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXEL_COUNT, PIXEL_PIN, NEO_GRB + NEO_KHZ800);
+
+// The running modes
+enum class MODE : byte
+{
+    AMP = 0,
+    FFT = 1,
+
+    LEN = FFT+1
+};
+
+static MODE current_mode = MODE::FFT;
 
 void setup() 
 { 
@@ -55,6 +68,28 @@ void setup()
 
     // Seed with random
     randomSeed(analogRead(0));
+
+    if (EEPROM.length() > 0)  // Only try to use EEPROM if there is some on the board
+    {
+        static const int EEPROM_address = 0;
+
+        // Get the previous mode. If it's valid, set current_mode the next mode % MODE::LEN
+        MODE value = MODE(EEPROM.read(EEPROM_address));
+        switch (value) 
+        {
+        case MODE::AMP:
+            current_mode = MODE::FFT;
+            break;
+        case MODE::FFT:
+            current_mode = MODE::AMP;
+            break;
+        default:
+            break;
+        }
+
+        EEPROM.write(EEPROM_address, byte(current_mode));
+    }
+
 }
 
 // This is low-level noise that's subtracted from each FFT output column:
@@ -76,6 +111,22 @@ uint32_t amp_to_color();
 
 void loop() 
 {   
+    // Show a red pixel for 2 seconds if we are displaying AMP mode
+    switch (current_mode) 
+    {
+    case MODE::AMP:
+        strip.setPixelColor(0, 255, 0, 0);
+        break;
+    case MODE::FFT:
+        strip.setPixelColor(0, 0, 255, 0);
+        break;
+    default:
+        break;
+    }
+
+    strip.show();
+    delay(2000);
+
     uint16_t prev_time = millis();
     
     // Change the color weights
