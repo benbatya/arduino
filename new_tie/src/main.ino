@@ -199,6 +199,15 @@ void flow_modes()
 //      delay(200);
 }
 
+// Shared static functions and data
+
+#define INPUT_FLOOR 19 //Lower range of analogRead input
+#define INPUT_CEILING 600 //Max range of analogRead input, the lower the value the more sensitive (1023 = max)
+
+float fscale(float originalMin, float originalMax, float newBegin, float
+             newEnd, float inputValue, float curve);
+uint16_t amplitude();
+
 // start Mode::FFT functionality
 
 // This is low-level noise that's subtracted from each FFT output column:
@@ -290,87 +299,17 @@ uint32_t fft_to_color()
 
 // start Mode::AMP functionality
 
-uint16_t amplitude()
-{
-    static const uint16_t sampleWindow = 50; // Sample window width in mS (50 mS = 20Hz)
-    uint32_t startMillis = millis();  // Start of sample window
-
-    uint16_t signalMax = 0;
-    uint16_t signalMin = 1024;
-
-    // collect data for 50 mS
-    while (millis() - startMillis < sampleWindow)
-    {
-        uint16_t sample = analogRead(MIC_PIN);
-        if (sample < 1024)  // toss out spurious readings
-        {
-            if (sample > signalMax)
-            {
-                signalMax = sample;  // save just the max levels
-            }
-            else if (sample < signalMin)
-            {
-                signalMin = sample;  // save just the min levels
-            }
-        }
-    }
-
-    uint16_t peakToPeak = signalMax - signalMin;  // max - min = peak-peak amplitude
-    return peakToPeak;
-}
-
 // From timings, I derived that this is the min and max for the
 // particular mic setup. Do a linear scale from these values to 0-255
 uint32_t amp_to_color()
 {
     // Linear amplitude display
     uint16_t amp = amplitude();
-//  int16_t amp = analogRead(MIC_PIN);
-//  amp -= 512; // Remove the DC offset
-//  amp <<= 6;  // make it expand to fill the full signed 16 bit range
 
-    // Used for auto scaling
-    static const uint8_t NUM_PREV_AMPS = 20;
-    static uint16_t prev_amp[NUM_PREV_AMPS] = {0};
 
-    for (int i=NUM_PREV_AMPS-1; i>0; i--) 
-    {
-        prev_amp[i] = prev_amp[i-1];
-    }
-    prev_amp[0] = amp;
+    //Scale the input logarithmically instead of linearly
+    uint16_t w = fscale(INPUT_FLOOR, INPUT_CEILING, 0, 255, amp, 2); 
 
-    uint16_t min_amp, max_amp;
-    min_amp = max_amp = amp;
-    for (int i=1; i<NUM_PREV_AMPS; i++) 
-    {
-        uint16_t amp = prev_amp[i];
-        // Update the min and max
-        if (min_amp > amp)
-        {
-            min_amp = amp;
-        }
-        if (max_amp < amp)
-        {
-            max_amp = amp;
-        }
-    }
-
-//  Serial.print("value = "); Serial.print(amp);
-//  Serial.print(" ,max = "); Serial.print(max_amp);
-//  Serial.print(" ,min = "); Serial.println(min_amp);
-
-    uint32_t temp = uint32_t(amp - min_amp) * 0xff / (max_amp - min_amp);
-    // Run abs on temp
-//  temp = (temp < 0) ? -temp: temp;
-
-    static const uint16_t MIN_AMP = 30;
-
-    if (temp < MIN_AMP) 
-    {
-        temp = 0;
-    }
-
-    uint16_t w = uint16_t(temp);
 //  uint16_t r = (w*color_weights[0] + w*color_weights[1] + w*color_weights[2]) / 256;
 //  uint16_t g = (w*color_weights[3] + w*color_weights[4] + w*color_weights[5]) / 256;
 //  uint16_t b = (w*color_weights[6] + w*color_weights[7] + w*color_weights[8]) / 256;
@@ -386,8 +325,6 @@ uint32_t amp_to_color()
 #define SAMPLE_WINDOW   10  // Sample window for average level
 #define PEAK_HANG 24 //Time of pause before peak dot falls
 #define PEAK_FALL 4 //Rate of falling peak dot
-#define INPUT_FLOOR 22 //Lower range of analogRead input
-#define INPUT_CEILING 300 //Max range of analogRead input, the lower the value the more sensitive (1023 = max)
 
 byte peak = 16;      // Peak level of column; used for falling dots
 //unsigned int sample;
@@ -396,8 +333,7 @@ byte dotCount = 0;  //Frame counter for peak dot
 byte dotHangCount = 0; //Frame counter for holding peak dot
 
 void drawLine(uint8_t from, uint8_t to, uint32_t c);
-float fscale(float originalMin, float originalMax, float newBegin, float
-             newEnd, float inputValue, float curve);
+uint32_t Wheel(byte WheelPos);
 
 void vu_mode()
 {
@@ -552,4 +488,33 @@ uint32_t Wheel(byte WheelPos)
         WheelPos -= 170; 
         return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
     }
+}
+
+uint16_t amplitude()
+{
+    static const uint16_t sampleWindow = 50; // Sample window width in mS (50 mS = 20Hz)
+    uint32_t startMillis = millis();  // Start of sample window
+
+    uint16_t signalMax = 0;
+    uint16_t signalMin = 1024;
+
+    // collect data for 50 mS
+    while (millis() - startMillis < sampleWindow)
+    {
+        uint16_t sample = analogRead(MIC_PIN);
+        if (sample < 1024)  // toss out spurious readings
+        {
+            if (sample > signalMax)
+            {
+                signalMax = sample;  // save just the max levels
+            }
+            else if (sample < signalMin)
+            {
+                signalMin = sample;  // save just the min levels
+            }
+        }
+    }
+
+    uint16_t peakToPeak = signalMax - signalMin;  // max - min = peak-peak amplitude
+    return peakToPeak;
 }
