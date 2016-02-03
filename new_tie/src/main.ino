@@ -23,6 +23,8 @@
 #   define PIXEL_COUNT 60 // Num of pixels in strip
 #endif
 
+#define SWITCH_TIME 5000
+
 // Parameter 1 = number of pixels in strip,  neopixel stick has 8
 // Parameter 2 = pin number (most are valid)
 // Parameter 3 = pixel type flags, add together as needed:
@@ -147,6 +149,32 @@ void loop()
     default:
         break;
     }
+
+    uint16_t new_time = millis();
+
+    // Switch every SWITCH_TIME
+    if ((new_time - prev_time) > SWITCH_TIME)
+    {
+        uint16_t color_idx0 = random(256);
+        uint16_t color_idx1 = (color_idx0 + 85) % 256;
+        uint16_t color_idx2 = (color_idx0 + 171) % 256;
+
+        uint32_t color0 = Wheel(byte(color_idx0));
+        uint32_t color1 = Wheel(byte(color_idx1));
+        uint32_t color2 = Wheel(byte(color_idx2));
+
+        color_weights[0] = (color0 >> 16) & 0xff;
+        color_weights[1] = (color0 >> 8) & 0xff;
+        color_weights[2] = (color0 >> 0) & 0xff;
+        color_weights[3] = (color1 >> 16) & 0xff;
+        color_weights[4] = (color1 >> 8) & 0xff;
+        color_weights[5] = (color1 >> 0) & 0xff;
+        color_weights[6] = (color2 >> 16) & 0xff;
+        color_weights[7] = (color2 >> 8) & 0xff;
+        color_weights[8] = (color2 >> 0) & 0xff;
+
+        prev_time = new_time;
+    }
 #endif
 }
 
@@ -158,16 +186,12 @@ void flow_modes()
 {
     uint32_t color;
 
-    switch (current_mode) 
+    if (current_mode == MODE::FFT) 
     {
-    case MODE::FFT:
         color = fft_to_color();
-        break;
-    case MODE::AMP:
+    } else
+    {
         color = amp_to_color();
-        break;
-    default:
-        return;
     }
 
     static uint32_t prev_colors[PIXEL_COUNT] = {0};
@@ -182,21 +206,7 @@ void flow_modes()
     {
         strip.setPixelColor(i, prev_colors[i]);
     }
-    strip.show();
-
-    uint16_t new_time = millis();
-
-    // Switch every 20sec
-    if ((new_time - prev_time) > 5000)
-    {
-        // Change the color weights
-        for (int i=0; i<9; i++) 
-        {
-            color_weights[i] = random(256);
-        }
-
-        prev_time = new_time;
-    }
+    strip.show();    
 
 //      Serial.write(255); // send a start byte
 //      Serial.write(bins, 3); // send out the data
@@ -324,14 +334,14 @@ uint32_t amp_to_color()
     //Scale the input logarithmically instead of linearly
     uint16_t w = fscale(INPUT_FLOOR, INPUT_CEILING, 0, 255, amp, 2); 
 
-//  uint16_t r = (w*color_weights[0] + w*color_weights[1] + w*color_weights[2]) / 256;
-//  uint16_t g = (w*color_weights[3] + w*color_weights[4] + w*color_weights[5]) / 256;
-//  uint16_t b = (w*color_weights[6] + w*color_weights[7] + w*color_weights[8]) / 256;
+    uint16_t r = (w*color_weights[0]) / 256;
+    uint16_t g = (w*color_weights[1]) / 256;
+    uint16_t b = (w*color_weights[2]) / 256;
 
 //  Serial.print("final = "); Serial.println(g);
 
-//  return Adafruit_NeoPixel::Color(uint8_t(r), uint8_t(g), uint8_t(b));
-    return Adafruit_NeoPixel::Color(uint8_t(w), uint8_t(w), uint8_t(w));
+    return Adafruit_NeoPixel::Color(uint8_t(r), uint8_t(g), uint8_t(b));
+//  return Adafruit_NeoPixel::Color(uint8_t(w), uint8_t(w), uint8_t(w));
 }
 
 // start MODE::VU code
@@ -403,8 +413,6 @@ void eq_mode()
 
     static uint16_t bins[PIXEL_COUNT] = { 0 };
 
-//  memset(bins, sizeof(bins), 0);
-
     for (int i=0; i<PIXEL_COUNT; i++)
     {
         bins[i] = 0;
@@ -437,10 +445,20 @@ void eq_mode()
         }
     }
 
+    uint8_t band = 0;
     for (uint8_t i=0; i<PIXEL_COUNT; i++) 
     {
-        uint8_t val = bins[i];
-        strip.setPixelColor(i, val, val, val);
+        uint16_t val = bins[i];
+
+        uint16_t r = (val*color_weights[band*3+0]) / 256;
+        uint16_t g = (val*color_weights[band*3+1]) / 256;
+        uint16_t b = (val*color_weights[band*3+2]) / 256;
+        strip.setPixelColor(i, uint8_t(r), uint8_t(g), uint8_t(b));
+
+        if ((i+1)%6 == 0)
+        {
+            band++;
+        }
     }
     strip.show();
 
