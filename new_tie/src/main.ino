@@ -38,8 +38,11 @@ enum class MODE : byte
     AMP = 0,
     FFT = 1,
     VU = 2,
+    EQ = 3,
+    LEN,
 
-    LEN
+    MIN = AMP,
+    MAX = LEN-1
 };
 
 static MODE current_mode = MODE::FFT;
@@ -79,19 +82,9 @@ void setup()
 
         // Get the previous mode. If it's valid, set current_mode the next mode % MODE::LEN
         MODE value = MODE(EEPROM.read(EEPROM_address));
-        switch (value) 
+        if (MODE::MIN <= value && value <= MODE::MAX) 
         {
-        case MODE::AMP:
-            current_mode = MODE::FFT;
-            break;
-        case MODE::FFT:
-            current_mode = MODE::VU;
-            break;
-        case MODE::VU:
-            current_mode = MODE::AMP;
-            break;
-        default:
-            break;
+            current_mode = MODE((uint8_t(value)+1) % uint8_t(MODE::LEN));
         }
 
         EEPROM.write(EEPROM_address, byte(current_mode));
@@ -108,6 +101,9 @@ void setup()
         break;
     case MODE::VU:
         strip.setPixelColor(0, 0, 0, 255);
+        break;
+    case MODE::EQ:
+        strip.setPixelColor(0, 0, 127, 127);
         break;
     default:
         break;
@@ -127,6 +123,7 @@ void setup()
 
 void flow_modes();
 void vu_mode();
+void eq_mode();
 
 void loop() 
 {   
@@ -138,6 +135,9 @@ void loop()
         break;
     case MODE::VU:
         vu_mode();
+        break;
+    case MODE::EQ:
+        eq_mode();
         break;
     default:
         break;
@@ -222,7 +222,8 @@ static const uint8_t PROGMEM noise[128]=
     70,70,105,105,90,70,70,70,70,70,70,70,70,70,70,70,
     70,70,70,70,70,70,70,70,70,70,70,85,95,100,70,70};
 
-uint32_t fft_to_color()
+// Returns an array of uint8_t of size FFT_N/2
+uint8_t* calc_fft_input()
 {
     for (int i = 0; i < FFT_N * 2; i += 2) // save FFT_N samples
     {
@@ -253,6 +254,13 @@ uint32_t fft_to_color()
     }
 
     memcpy(prev_values, fft_log_out, FFT_N/2);
+
+    return output;
+}
+
+uint32_t fft_to_color()
+{
+    uint8_t* output = calc_fft_input();
 
     static uint16_t bins[3] = { 0 };
 
@@ -379,6 +387,52 @@ void vu_mode()
     {
         dotHangCount++; 
     }
+}
+
+void eq_mode()
+{
+    uint8_t* output = calc_fft_input();
+
+    static const uint8_t FREQ_PER_PIXEL = FFT_N/2/PIXEL_COUNT;
+
+    static uint16_t bins[PIXEL_COUNT] = { 0 };
+
+    memset(bins, sizeof(bins), 0);
+
+    uint8_t current_bin = 0;
+    for (uint16_t i=0; i<FFT_N/2; i++)
+    {
+        uint8_t val = output[i];
+        // This is a hacky log2 calculation
+        for (int j=0; j<8; j++)
+        {
+            if (val >= (1<<j))
+            {
+                if (bins[current_bin] < 256)
+                {
+                    bins[current_bin]++;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        // This is a hacky way of splitting up the frequency domains
+        if ((i+1)%FREQ_PER_PIXEL == 0)
+        {
+            current_bin++;
+        }
+    }
+
+    for (uint8_t i=0; i<PIXEL_COUNT; i++) 
+    {
+        uint8_t val = bins[i];
+        strip.setPixelColor(i, val, val, val);
+    }
+
+    strip.show();
 }
 
 //Used to draw a line between two points of a given color
@@ -518,3 +572,5 @@ uint16_t amplitude()
     uint16_t peakToPeak = signalMax - signalMin;  // max - min = peak-peak amplitude
     return peakToPeak;
 }
+
+
