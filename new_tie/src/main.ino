@@ -47,15 +47,13 @@ enum class MODE : byte
 
 static MODE current_mode = MODE::FFT;
 
+//#define DEBUG 1
+
 static int32_t prev_time;
 static uint8_t color_weights[9];
 
 void setup() 
 { 
-//  pinMode(LED_PIN, OUTPUT);
-//  Serial.begin(9600);
-//  Serial.begin(115200); // use the serial port
-
     analogReference(DEFAULT);
 //  TIMSK0 = 0; // turn off timer0 for lower jitter
 //  ADCSRA = 0xe5; // set adc on, set the adc to free running mode, prescaler=32
@@ -76,6 +74,9 @@ void setup()
     // Seed with random
     randomSeed(analogRead(0));
 
+#ifdef DEBUG 
+    Serial.begin(115200); // use the serial port
+#else
     if (EEPROM.length() > 0)  // Only try to use EEPROM if there is some on the board
     {
         static const int EEPROM_address = 0;
@@ -119,6 +120,7 @@ void setup()
     {
         color_weights[i] = random(256);
     }
+#endif
 }
 
 void flow_modes();
@@ -127,6 +129,9 @@ void eq_mode();
 
 void loop() 
 {   
+#ifdef DEBUG
+    eq_mode();
+#else
     switch (current_mode) 
     {
     case MODE::FFT:
@@ -142,6 +147,7 @@ void loop()
     default:
         break;
     }
+#endif
 }
 
 
@@ -393,11 +399,16 @@ void eq_mode()
 {
     uint8_t* output = calc_fft_input();
 
-    static const uint8_t FREQ_PER_PIXEL = FFT_N/2/PIXEL_COUNT;
+    static const uint8_t FREQ_PER_PIXEL = FFT_N/(2*PIXEL_COUNT);
 
     static uint16_t bins[PIXEL_COUNT] = { 0 };
 
-    memset(bins, sizeof(bins), 0);
+//  memset(bins, sizeof(bins), 0);
+
+    for (int i=0; i<PIXEL_COUNT; i++)
+    {
+        bins[i] = 0;
+    }
 
     uint8_t current_bin = 0;
     for (uint16_t i=0; i<FFT_N/2; i++)
@@ -431,8 +442,21 @@ void eq_mode()
         uint8_t val = bins[i];
         strip.setPixelColor(i, val, val, val);
     }
-
     strip.show();
+
+#ifdef DEBUG
+    Serial.write(255);
+
+//  static uint8_t data[PIXEL_COUNT];
+//  for (uint8_t i=0; i<PIXEL_COUNT; i++)
+//  {
+//      uint8_t val = bins[i];
+//      val = val==255? 254: val;
+//      data[i] = val;
+//  }
+    Serial.write(output, FFT_N/2);
+#endif
+
 }
 
 //Used to draw a line between two points of a given color
