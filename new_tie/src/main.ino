@@ -1,11 +1,25 @@
+/**
+ * This is code for the tie
+ */
 
-#define LOG_OUT 1 // use the log output function
+#define LIN_OUT8 1 // use the log output function
+#define SCALE 256
 #define FFT_N 256 // set to 256 point fft
 
 #define LED_PIN 13
 #define TIME_DELAY 100
 
 #include <FFT.h> // include the library
+
+#if LOG_OUT
+#   define FFT_FUNC fft_mag_log
+#   define FFT_OUTPUT fft_log_out
+#elif LIN_OUT8
+#   define FFT_FUNC fft_mag_lin8
+#   define FFT_OUTPUT fft_lin_out8
+#else
+#error "This is invalid!!"
+#endif
 
 #include <Adafruit_NeoPixel.h>
 
@@ -24,6 +38,8 @@
 #endif
 
 #define SWITCH_TIME 5000
+
+#define GEA(val, exp, el) ((val >= 1<<exp) ? exp : el) 
 
 // Parameter 1 = number of pixels in strip,  neopixel stick has 8
 // Parameter 2 = pin number (most are valid)
@@ -58,19 +74,11 @@ void switch_colors();
 
 void setup() 
 { 
-    analogReference(DEFAULT);
-//  TIMSK0 = 0; // turn off timer0 for lower jitter
-//  ADCSRA = 0xe5; // set adc on, set the adc to free running mode, prescaler=32
+    // Change the prescaler to 16 to get a better sampling rate
+    ADCSRA &= ~0x07;
+    ADCSRA |= _BV(ADPS2); // prescaler = 16
 
-//    ADMUX  = _BV(REFS0) | (MIC_PIN - 8);
-//    ADCSRB = _BV(MUX5);
-//    DIDR2 = 1<<(MIC_PIN-8); // turn off the digital input for adc2
-//    ADCSRA = _BV(ADEN)  | // ADC enable
-//            _BV(ADSC)  | // ADC start
-//            _BV(ADATE) | // Auto trigger
-////          _BV(ADIE)  | // Interrupt enable
-//            _BV(ADPS1) | _BV(ADPS0); // 64:1 / 13 = 9615 Hz
-//  ADCSRA |= _BV(ADPS2) | _BV(ADPS0);
+    analogReference(DEFAULT);
         
     strip.begin();
     strip.show(); // Initialize all pixels to 'off'
@@ -215,16 +223,16 @@ uint16_t amplitude();
 // start Mode::FFT functionality
 
 // This is low-level noise that's subtracted from each FFT output column:
-static const uint8_t PROGMEM noise[128]=
-  // This is low-level noise that's subtracted from each FFT output column:
-{  100,90,80,80,80,80,80,80,80,80,80,70,70,70,70,70,
-    70,70,70,70,70,70,70,70,70,70,80,70,70,70,70,70,
-    96,106,90,70,70,70,70,70,70,70,70,70,70,70,70,70,
-    70,70,70,70,70,70,70,70,70,70,80,86,80,70,70,70,
-    70,105,110,95,70,70,70,70,70,70,70,70,70,70,70,70,
-    70,70,70,70,70,70,70,70,70,70,70,90,90,80,70,70,
-    70,70,105,105,90,70,70,70,70,70,70,70,70,70,70,70,
-    70,70,70,70,70,70,70,70,70,70,70,85,95,100,70,70};
+static const uint8_t PROGMEM noise[128] = {
+    15, 10, 8, 4, 5, 7, 6, 7, 5, 5, 6, 9, 8, 5, 4, 4
+    , 5, 4, 4, 3, 4, 4, 7, 11, 6, 2, 2, 2, 2, 3, 2, 2
+    , 2, 4, 8, 7, 3, 2, 1, 1, 1, 1, 1, 1, 2, 5, 6, 3
+    , 1, 0, 0, 0, 0, 0, 0, 0, 2, 4, 3, 0, 0, 0, 0, 0
+    , 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
+    , 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0
+    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
 
 // Returns an array of uint8_t of size FFT_N/2
 uint8_t* calc_fft_input()
@@ -243,23 +251,16 @@ uint8_t* calc_fft_input()
     fft_window(); // window the data for better frequency response
     fft_reorder(); // reorder the data before doing the fft
     fft_run(); // process the data in the fft
-    fft_mag_log(); // take the output of the fft
+    FFT_FUNC(); // take the output of the fft
     
-    static uint8_t prev_values[FFT_N/2] = {0};
-    static uint8_t output[FFT_N/2];
-
     for (int i=0; i<FFT_N/2; i++)
     {
         // Do a temporal filter operation
         uint8_t L = pgm_read_byte(&noise[i]);
-        fft_log_out[i] = (fft_log_out[i] <= L) ? 0 : fft_log_out[i];
-        int8_t diff = int8_t(fft_log_out[i]) - prev_values[i]; // get the difference
-        output[i] = (diff > 70) ? 0: fft_log_out[i];  // make sure that the difference between the 
+        FFT_OUTPUT[i] = (FFT_OUTPUT[i] <= L) ? 0 : FFT_OUTPUT[i];
     }
 
-    memcpy(prev_values, fft_log_out, FFT_N/2);
-
-    return output;
+    return FFT_OUTPUT;
 }
 
 uint32_t fft_to_color()
@@ -274,28 +275,16 @@ uint32_t fft_to_color()
     }
 
     uint8_t current_bin = 0;
-    static const uint8_t SPLIT_POINT = FFT_N/2/3;
+    // Split the bands into roughly low, mid, and high
+    static const uint8_t BAND_END[3] = {19, 59, 127};
     for (int i=0; i<FFT_N/2; i++)
     {
         uint8_t val = output[i];
-        // This is a hacky log2 calculation
-        for (int j=0; j<8; j++)
-        {
-            if (val >= (1<<j))
-            {
-                if (bins[current_bin] < 256) 
-                {
-                    bins[current_bin]++; 
-                }
-            }
-            else
-            {
-                break;
-            }
-        }
+
+        bins[current_bin] += GEA(val, 7, GEA(val, 6, GEA(val, 5, GEA(val, 4, GEA(val, 3, GEA(val, 2, GEA(val, 1, 0)))))));
 
         // This is a hacky way of splitting up the frequency domains
-        if (i%SPLIT_POINT == SPLIT_POINT-1)
+        if (i >= BAND_END[current_bin])
         {
             current_bin++;
         }
@@ -408,21 +397,8 @@ void eq_mode()
     for (uint16_t i=0; i<FFT_N/2; i++)
     {
         uint8_t val = output[i];
-        // This is a hacky log2 calculation
-        for (int j=0; j<8; j++)
-        {
-            if (val >= (1<<j))
-            {
-                if (bins[current_bin] < 256)
-                {
-                    bins[current_bin]++;
-                }
-            }
-            else
-            {
-                break;
-            }
-        }
+        
+        bins[current_bin] += GEA(val, 7, GEA(val, 6, GEA(val, 5, GEA(val, 4, GEA(val, 3, GEA(val, 2, GEA(val, 1, 0)))))));
 
         // This is a hacky way of splitting up the frequency domains
         if ((i+1)%FREQ_PER_PIXEL == 0)
@@ -430,6 +406,9 @@ void eq_mode()
             current_bin++;
         }
     }
+
+    // Split the bands into roughly low, mid, and high
+    static const uint8_t BAND_END[3] = {2, 8, 16};
 
     uint8_t band = 0;
     for (uint8_t i=0; i<PIXEL_COUNT; i++) 
@@ -441,7 +420,7 @@ void eq_mode()
         uint16_t b = (val*color_weights[band*3+2]) >> 8;
         strip.setPixelColor(i, uint8_t(r), uint8_t(g), uint8_t(b));
 
-        if ((i+1)%6 == 0)
+        if (i >= BAND_END[band])
         {
             band++;
         }
