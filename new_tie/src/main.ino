@@ -240,10 +240,6 @@ static const uint8_t PROGMEM noise[128] = {
 // Returns an array of uint8_t of size FFT_N/2
 uint8_t* calc_fft_input()
 {
-    // Add in a 30ms delay to compensate for the speed of the fft verses the amplitude reading.
-    // The pixels are more comfortable to watch if they increment slower
-    delay(30);
-
     for (int i = 0; i < FFT_N * 2; i += 2) // save FFT_N samples
     {
         static const int16_t noiseThreshold = 4;
