@@ -54,6 +54,8 @@ static MODE current_mode = MODE::FFT;
 static int32_t prev_time;
 static uint8_t color_weights[9];
 
+void switch_colors();
+
 void setup() 
 { 
     analogReference(DEFAULT);
@@ -69,7 +71,7 @@ void setup()
 ////          _BV(ADIE)  | // Interrupt enable
 //            _BV(ADPS1) | _BV(ADPS0); // 64:1 / 13 = 9615 Hz
 //  ADCSRA |= _BV(ADPS2) | _BV(ADPS0);
-
+        
     strip.begin();
     strip.show(); // Initialize all pixels to 'off'
 
@@ -112,16 +114,15 @@ void setup()
         break;
     }
 
+    // Drop the brightness by half
+    strip.setBrightness(127);
     strip.show();
     delay(2000);
 
     prev_time = millis();
 
     // Init the color weights
-    for (int i=0; i<9; i++) 
-    {
-        color_weights[i] = random(256);
-    }
+    switch_colors();
 #endif
 }
 
@@ -150,28 +151,16 @@ void loop()
         break;
     }
 
+    // Halve the brightness
+    strip.setBrightness(127);
+    strip.show();  
+
     uint16_t new_time = millis();
 
     // Switch every SWITCH_TIME
     if ((new_time - prev_time) > SWITCH_TIME)
     {
-        uint16_t color_idx0 = random(256);
-        uint16_t color_idx1 = (color_idx0 + 85) % 256;
-        uint16_t color_idx2 = (color_idx0 + 171) % 256;
-
-        uint32_t color0 = Wheel(byte(color_idx0));
-        uint32_t color1 = Wheel(byte(color_idx1));
-        uint32_t color2 = Wheel(byte(color_idx2));
-
-        color_weights[0] = (color0 >> 16) & 0xff;
-        color_weights[1] = (color0 >> 8) & 0xff;
-        color_weights[2] = (color0 >> 0) & 0xff;
-        color_weights[3] = (color1 >> 16) & 0xff;
-        color_weights[4] = (color1 >> 8) & 0xff;
-        color_weights[5] = (color1 >> 0) & 0xff;
-        color_weights[6] = (color2 >> 16) & 0xff;
-        color_weights[7] = (color2 >> 8) & 0xff;
-        color_weights[8] = (color2 >> 0) & 0xff;
+        switch_colors();
 
         prev_time = new_time;
     }
@@ -205,8 +194,7 @@ void flow_modes()
     for (uint16_t i=0; i<PIXEL_COUNT; i++) 
     {
         strip.setPixelColor(i, prev_colors[i]);
-    }
-    strip.show();    
+    }  
 
 //      Serial.write(255); // send a start byte
 //      Serial.write(bins, 3); // send out the data
@@ -313,9 +301,9 @@ uint32_t fft_to_color()
         }
     }
 
-    uint16_t r = (bins[0]*color_weights[0] + bins[1]*color_weights[1] + bins[2]*color_weights[2]) / 256;
-    uint16_t g = (bins[0]*color_weights[3] + bins[1]*color_weights[4] + bins[2]*color_weights[5]) / 256;
-    uint16_t b = (bins[0]*color_weights[6] + bins[1]*color_weights[7] + bins[2]*color_weights[8]) / 256;
+    uint16_t r = (bins[0]*color_weights[0] + bins[1]*color_weights[1] + bins[2]*color_weights[2]) >> 8;
+    uint16_t g = (bins[0]*color_weights[3] + bins[1]*color_weights[4] + bins[2]*color_weights[5]) >> 8;
+    uint16_t b = (bins[0]*color_weights[6] + bins[1]*color_weights[7] + bins[2]*color_weights[8]) >> 8;
 
     uint32_t new_color = Adafruit_NeoPixel::Color(uint8_t(r), uint8_t(g), uint8_t(b));
     return new_color;
@@ -334,9 +322,9 @@ uint32_t amp_to_color()
     //Scale the input logarithmically instead of linearly
     uint16_t w = fscale(INPUT_FLOOR, INPUT_CEILING, 0, 255, amp, 2); 
 
-    uint16_t r = (w*color_weights[0]) / 256;
-    uint16_t g = (w*color_weights[1]) / 256;
-    uint16_t b = (w*color_weights[2]) / 256;
+    uint16_t r = (w*color_weights[0]) >> 8;
+    uint16_t g = (w*color_weights[1]) >> 8;
+    uint16_t b = (w*color_weights[2]) >> 8;
 
 //  Serial.print("final = "); Serial.println(g);
 
@@ -387,8 +375,6 @@ void vu_mode()
     uint16_t y = strip.numPixels() - peak; 
     
     strip.setPixelColor(y - 1, Wheel(map(y, 0, strip.numPixels() - 1, 30, 150))); 
-    
-    strip.show(); 
     
     // Frame based peak dot animation
     if (dotHangCount > PEAK_HANG) //Peak pause length
@@ -450,9 +436,9 @@ void eq_mode()
     {
         uint16_t val = bins[i];
 
-        uint16_t r = (val*color_weights[band*3+0]) / 256;
-        uint16_t g = (val*color_weights[band*3+1]) / 256;
-        uint16_t b = (val*color_weights[band*3+2]) / 256;
+        uint16_t r = (val*color_weights[band*3+0]) >> 8;
+        uint16_t g = (val*color_weights[band*3+1]) >> 8;
+        uint16_t b = (val*color_weights[band*3+2]) >> 8;
         strip.setPixelColor(i, uint8_t(r), uint8_t(g), uint8_t(b));
 
         if ((i+1)%6 == 0)
@@ -460,7 +446,6 @@ void eq_mode()
             band++;
         }
     }
-    strip.show();
 
 #ifdef DEBUG
     Serial.write(255);
@@ -615,4 +600,23 @@ uint16_t amplitude()
     return peakToPeak;
 }
 
+void switch_colors()
+{
+    uint16_t color_idx0 = random(256);
+    uint16_t color_idx1 = (color_idx0 + 85) % 256;
+    uint16_t color_idx2 = (color_idx0 + 171) % 256;
 
+    uint32_t color0 = Wheel(byte(color_idx0));
+    uint32_t color1 = Wheel(byte(color_idx1));
+    uint32_t color2 = Wheel(byte(color_idx2));
+
+    color_weights[0] = (color0 >> 16) & 0xff;
+    color_weights[1] = (color0 >> 8) & 0xff;
+    color_weights[2] = (color0 >> 0) & 0xff;
+    color_weights[3] = (color1 >> 16) & 0xff;
+    color_weights[4] = (color1 >> 8) & 0xff;
+    color_weights[5] = (color1 >> 0) & 0xff;
+    color_weights[6] = (color2 >> 16) & 0xff;
+    color_weights[7] = (color2 >> 8) & 0xff;
+    color_weights[8] = (color2 >> 0) & 0xff;
+}
