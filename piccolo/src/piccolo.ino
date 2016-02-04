@@ -25,35 +25,32 @@ ffft library is provided under its own terms -- see ffft.S for specifics.
 // IMPORTANT: FFT_N should be #defined as 128 in ffft.h.
 
 #include <avr/pgmspace.h>
+
+#define FFT_N   256
 #include <ffft.h>
-#include <math.h>
-#include <Wire.h>
-//#include <Adafruit_GFX.h>
-//#include <Adafruit_LEDBackpack.h>
+//#include <math.h>
+//#include <Wire.h>
 
 // Microphone connects to Analog Pin 0.  Corresponding ADC channel number
 // varies among boards...it's ADC0 on Uno and Mega, ADC7 on Leonardo.
 // Other boards may require different settings; refer to datasheet.
-#if 1 // def __AVR_ATmega32U4__
- #define ADC_CHANNEL MIC_PIN
-#else
- #define ADC_CHANNEL 0
-#endif
+#define ADC_CHANNEL MIC_PIN
 
 int16_t       capture[FFT_N];    // Audio capture buffer
 complex_t     bfly_buff[FFT_N];  // FFT "butterfly" buffer
-uint16_t      spectrum[FFT_N/2]; // Spectrum output buffer
+//uint16_t      spectrum[FFT_N/2]; // Spectrum output buffer
+uint16_t* spectrum;
 volatile byte samplePos = 0;     // Buffer position counter
 
-byte
-  peak[8],      // Peak level of each column; used for falling dots
-  dotCount = 0, // Frame counter for delaying dot-falling speed
-  colCount = 0; // Frame counter for storing past column data
-int
-  col[8][10],   // Column levels for the prior 10 frames
-  minLvlAvg[8], // For dynamic adjustment of low & high ends of graph,
-  maxLvlAvg[8], // pseudo rolling averages for the prior few frames.
-  colDiv[8];    // Used when filtering FFT output to 8 columns
+//byte
+//  peak[8],      // Peak level of each column; used for falling dots
+//  dotCount = 0, // Frame counter for delaying dot-falling speed
+//  colCount = 0; // Frame counter for storing past column data
+//int
+//  col[8][10],   // Column levels for the prior 10 frames
+//  minLvlAvg[8], // For dynamic adjustment of low & high ends of graph,
+//  maxLvlAvg[8], // pseudo rolling averages for the prior few frames.
+//  colDiv[8];    // Used when filtering FFT output to 8 columns
 
 /*
 These tables were arrived at through testing, modeling and trial and error,
@@ -112,8 +109,10 @@ static const uint8_t PROGMEM
 void setup() {
   uint8_t i, j, nBins, binNum, *data;
 
-  memset(peak, 0, sizeof(peak));
-  memset(col , 0, sizeof(col));
+//memset(peak, 0, sizeof(peak));
+//memset(col , 0, sizeof(col));
+
+  spectrum = (uint16_t*)capture;
 
 //for(i=0; i<8; i++) {
 //  minLvlAvg[i] = 0;
@@ -127,75 +126,65 @@ void setup() {
 
 //matrix.begin(0x70);
 
-  Serial.begin(115200);
-  analogReference(DEFAULT);
+  Serial.begin(9600);
+//analogReference(DEFAULT);
 
-  // Init ADC free-run mode; f = ( 16MHz/prescaler ) / 13 cycles/conversion
-//#if 1 // def __AVR_ATmega32U4__
-//    ADMUX  = ADC_CHANNEL | _BV(REFS0); // FLORA Channel sel, right-adj, use internal AREF
+//#if (ADC_CHANNEL > 7)
+//   ADMUX  = _BV(REFS0) | (ADC_CHANNEL - 8);
+//   ADCSRB = _BV(MUX5);        // Free run mode, high MUX bit
+//   DIDR2  = 1 << (ADC_CHANNEL - 8);
 //#else
-//    ADMUX  = ADC_CHANNEL; // Arduino Uno: Channel sel, right-adj, use AREF pin
+//   ADMUX  = _BV(REFS0) | ADC_CHANNEL;
+//   ADCSRB = 0;                // Free run mode, no high MUX bit
+//   DIDR0  = 1 << ADC_CHANNEL;
 //#endif
-//  ADCSRA = _BV(ADEN)  | // ADC enable
-//           _BV(ADSC)  | // ADC start
-//           _BV(ADATE) | // Auto trigger
-//           _BV(ADIE)  | // Interrupt enable
-//           _BV(ADPS2) | _BV(ADPS1) | _BV(ADPS0); // 128:1 / 13 = 9615 Hz
-//  ADCSRB = 0;                // Free run mode, no high MUX bit
-//  DIDR0  = 1 << ADC_CHANNEL; // Turn off digital input for ADC pin
-//  TIMSK0 = 0;                // Timer0 off
-//
-//  sei(); // Enable interrupts
-
-
-#if (ADC_CHANNEL > 7)
-   ADMUX  = _BV(REFS0) | (ADC_CHANNEL - 8);
-   ADCSRB = _BV(MUX5);        // Free run mode, high MUX bit
-   DIDR2  = 1 << (ADC_CHANNEL - 8);
-#else
-   ADMUX  = _BV(REFS0) | ADC_CHANNEL;
-   ADCSRB = 0;                // Free run mode, no high MUX bit
-   DIDR0  = 1 << ADC_CHANNEL;
-#endif
-   ADCSRA = _BV(ADEN)  | // ADC enable
-            _BV(ADSC)  | // ADC start
-            _BV(ADATE) | // Auto trigger
-            _BV(ADIE)  | // Interrupt enable
-            _BV(ADPS1) | _BV(ADPS0); // 64:1 / 13 = 9615 Hz
-   TIMSK0 = 0;                // Timer0 off
-   sei(); // Enable interrupts
+//   ADCSRA = _BV(ADEN)  | // ADC enable
+//            _BV(ADSC)  | // ADC start
+//            _BV(ADATE) | // Auto trigger
+//            _BV(ADIE)  | // Interrupt enable
+//            _BV(ADPS1) | _BV(ADPS0); // 64:1 / 13 = 9615 Hz
+//   TIMSK0 = 0;                // Timer0 off
+//   sei(); // Enable interrupts
+  ADCSRA &= ~0x7;
+  ADCSRA |= _BV(ADPS1) | _BV(ADPS0);
 }
 
 void loop() {
-  uint8_t  i, x, L, *data, nBins, binNum, weighting, c;
-  uint16_t minLvl, maxLvl;
-  int      level, y, sum;
+//uint8_t  i, x, L, *data, nBins, binNum, weighting, c;
+//uint16_t minLvl, maxLvl;
+//int      level, y, sum;
 
-  while(ADCSRA & _BV(ADIE)); // Wait for audio sampling to finish
+  for (uint16_t x = 0; x<FFT_N; x++) 
+  {
+      static const int16_t noiseThreshold = 4;
 
-  fft_input(capture, bfly_buff);   // Samples -> complex #s
-  samplePos = 0;                   // Reset sample counter
-  ADCSRA |= _BV(ADIE);             // Resume sampling interrupt
-  fft_execute(bfly_buff);          // Process complex data
-  fft_output(bfly_buff, spectrum); // Complex -> spectrum
-
-  static uint8_t output[FFT_N/2];
-
-  // Remove noise and apply EQ levels
-  for(x=0; x<FFT_N/2; x++) {
-    L = pgm_read_byte(&noise[x]);
-    spectrum[x] = (spectrum[x] <= L) ? 0 :
-      (((spectrum[x] - L) * (256L - pgm_read_byte(&eq[x]))) >> 8);
-
-    output[x] = spectrum[x]==255? 254: spectrum[x];
+      int16_t sample = analogRead(ADC_CHANNEL);
+      capture[samplePos] = 
+          ((sample > (512-noiseThreshold)) &&
+           (sample < (512+noiseThreshold))) ? 0 :
+          sample - 512; // Sign-convert for FFT; -512 to +511
   }
+
+//  fft_input(capture, bfly_buff);   // Samples -> complex #s
+////samplePos = 0;                   // Reset sample counter
+////ADCSRA |= _BV(ADIE);             // Resume sampling interrupt
+//  fft_execute(bfly_buff);          // Process complex data
+//  fft_output(bfly_buff, spectrum); // Complex -> spectrum
+
+//// Remove noise and apply EQ levels
+//for(x=0; x<FFT_N/2; x++) {
+//  L = pgm_read_byte(&noise[x]);
+//  spectrum[x] = (spectrum[x] <= L) ? 0 :
+//    (((spectrum[x] - L) * (256L - pgm_read_byte(&eq[x]))) >> 8);
+//
+//  output[x] = spectrum[x]==255? 254: spectrum[x];
+//}
 
   // Fill background w/colors, then idle parts of columns will erase
 //matrix.fillRect(0, 0, 8, 3, LED_RED);    // Upper section
 //matrix.fillRect(0, 3, 8, 2, LED_YELLOW); // Mid
 //matrix.fillRect(0, 5, 8, 3, LED_GREEN);  // Lower section
 
-  Serial.write(255);
 
   // Downsample spectrum output to 8 columns:
 //for(x=0; x<8; x++) {
@@ -246,11 +235,28 @@ void loop() {
 //  else           matrix.drawPixel(x, y, LED_GREEN);
 //}
 
-//for(x=0; x<FFT_N/2; x++) {
-    Serial.write(output, FFT_N/2);
-//}
+//static uint8_t output[FFT_N/2];
 
+  int16_t min_val, max_val;
+  min_val = max_val = capture[0];
+  for(uint16_t i=1; i<FFT_N; i++) 
+  {
+      int16_t val = capture[i];
+      if (val < min_val) { min_val = val; }
+      if (val > max_val) { max_val = val; }
+      //    uint16_t val = spectrum[i];
+      //    val >>= 8;
+      //    val = val==255? 254: val;
+      //    output[i] = uint8_t(val);
+  }
+
+  Serial.print("Min ="); Serial.print(min_val); 
+  Serial.print(", Max = "); Serial.print(max_val);
+  Serial.print(", count = "); Serial.println(FFT_N);
+//Serial.write(255);
+//Serial.write(output, FFT_N/2);
   Serial.flush();
+  delay(300);
 //
 //matrix.writeDisplay();
 
@@ -264,16 +270,16 @@ void loop() {
 
 //if(++colCount >= 10) colCount = 0;
 }
-
-ISR(ADC_vect) { // Audio-sampling interrupt
-  static const int16_t noiseThreshold = 4;
-  int16_t              sample         = ADC; // 0-1023
-
-  capture[samplePos] =
-    ((sample > (512-noiseThreshold)) &&
-     (sample < (512+noiseThreshold))) ? 0 :
-    sample - 512; // Sign-convert for FFT; -512 to +511
-
-  if(++samplePos >= FFT_N) ADCSRA &= ~_BV(ADIE); // Buffer full, interrupt off
-}
+//
+//ISR(ADC_vect) { // Audio-sampling interrupt
+//  static const int16_t noiseThreshold = 4;
+//  int16_t              sample         = ADC; // 0-1023
+//
+//  capture[samplePos] =
+//    ((sample > (512-noiseThreshold)) &&
+//     (sample < (512+noiseThreshold))) ? 0 :
+//    sample - 512; // Sign-convert for FFT; -512 to +511
+//
+//  if(++samplePos >= FFT_N) ADCSRA &= ~_BV(ADIE); // Buffer full, interrupt off
+//}
 
