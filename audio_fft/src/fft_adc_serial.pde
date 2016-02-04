@@ -7,7 +7,8 @@ with the fft. the data is sent out over the serial
 port at 115.2kb.
 */
 
-#define LOG_OUT 1 // use the log output function
+#define LIN_OUT8 1 // use the log output function
+#define SCALE 256
 #define FFT_N 256 // set to 256 point fft
 
 #define LED_PIN 13
@@ -34,6 +35,8 @@ void setup()
 ////          _BV(ADIE)  | // Interrupt enable
 //            _BV(ADPS1) | _BV(ADPS0); // 64:1 / 13 = 9615 Hz
 //  ADCSRA |= _BV(ADPS0); // | _BV(ADPS0);
+    ADCSRA &= ~0x07;
+    ADCSRA |= _BV(ADPS1) | _BV(ADPS0);
 }
 
 //FPSCounter counter("loop");
@@ -60,10 +63,15 @@ uint16_t amplitude();
 
 void loop() 
 {  
+    uint32_t total = 0;
+    uint32_t count = 0;
+
     while (1) // reduces jitter
     {
+//      uint32_t start_time = micros();
+
 //      cli();  // UDRE interrupt slows this way down on arduino1.0
-        for (int i = 0; i < FFT_N * 2; i += 2) // save FFT_N samples
+        for (int i = 0; i < FFT_N; i++) // save FFT_N samples
         {
 //          while (!(ADCSRA & 0x10)); // wait for adc to be ready
 //          ADCSRA = 0xf5; // restart adc
@@ -79,32 +87,48 @@ void loop()
                  (k < (512+noiseThreshold))) ? 0 :
                     k - 512; // Sign-convert for FFT; -512 to +511
             k <<= 6; // form into a 16b signed int
-            fft_input[i] = k; // put real data into even bins
-            fft_input[i + 1] = 0; // set odd bins to 0
+            fft_input[i*2] = k; // put real data into even bins
+            fft_input[i*2 + 1] = 0; // set odd bins to 0
         }
+
+//      total += micros() - start_time;
+//      count++;
+
         fft_window(); // window the data for better frequency response
         fft_reorder(); // reorder the data before doing the fft
         fft_run(); // process the data in the fft
-        fft_mag_log(); // take the output of the fft
+        fft_mag_lin8(); // take the output of the fft
 //      sei();
         
-        static uint8_t prev_values[FFT_N/2] = {0};
-        static uint8_t output[FFT_N/2];
+//      static uint8_t prev_values[FFT_N/2] = {0};
+//      static uint8_t output[FFT_N/2];
+//
+//      for (int i=0; i<FFT_N/2; i++)
+//      {
+//          // Do a temporal filter operation
+//          uint8_t L = pgm_read_byte(&noise[i]);
+//          fft_log_out[i] = (fft_log_out[i] <= L) ? 0 : fft_log_out[i];
+//          int8_t diff = int8_t(fft_log_out[i]) - prev_values[i]; // get the difference
+//          output[i] = (diff > 70) ? 0: fft_log_out[i];  // make sure that the difference between the
+//      }
+//
+//      memcpy(prev_values, fft_log_out, FFT_N/2);
 
-        for (int i=0; i<FFT_N/2; i++)
-        {
-            // Do a temporal filter operation
-            uint8_t L = pgm_read_byte(&noise[i]);
-            fft_log_out[i] = (fft_log_out[i] <= L) ? 0 : fft_log_out[i];
-            int8_t diff = int8_t(fft_log_out[i]) - prev_values[i]; // get the difference
-            output[i] = (diff > 70) ? 0: fft_log_out[i];  // make sure that the difference between the
-        }
+//      if (count > 50)
+//      {
+//          float avg = float(total) / count;
+//          total = 0;
+//          count = 0;
+//          Serial.print("average time = "); Serial.print(avg);
+//          float hz = avg / FFT_N;
+//          hz = 1000000.0f/hz;
+//          Serial.print(", Hz = "); Serial.println(hz);
+//      }
 
-        memcpy(prev_values, fft_log_out, FFT_N/2);
 
         Serial.write(255); // send a start byte
-//      Serial.write(fft_log_out, FFT_N/2); // send out the data
-        Serial.write(output, FFT_N/2); // send out the data
+        Serial.write(fft_lin_out8, FFT_N/2); // send out the data
+//      Serial.write(output, FFT_N/2); // send out the data
         Serial.flush();
     }
 }
