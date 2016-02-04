@@ -25,6 +25,8 @@
 
 #include <EEPROM.h>
 
+//#define DEBUG 1
+
 #ifndef MIC_PIN
 #   define MIC_PIN 2
 #endif 
@@ -37,7 +39,7 @@
 #   define PIXEL_COUNT 60 // Num of pixels in strip
 #endif
 
-#define SWITCH_TIME 5000
+#define SWITCH_TIME 500
 
 #define GEA(val, exp, el) ((val >= 1<<exp) ? exp : el) 
 
@@ -65,9 +67,8 @@ enum class MODE : byte
 
 static MODE current_mode = MODE::FFT;
 
-//#define DEBUG 1
-
 static int32_t prev_time;
+static uint16_t color_idx0;
 static uint8_t color_weights[9];
 
 void switch_colors();
@@ -123,12 +124,14 @@ void setup()
     }
 
     // Drop the brightness by half
-    strip.setBrightness(127);
+//  strip.setBrightness(127);
     strip.show();
     delay(2000);
 
     prev_time = millis();
 
+    // Start the color at a random color
+    color_idx0 = random(256);
     // Init the color weights
     switch_colors();
 #endif
@@ -274,9 +277,11 @@ uint32_t fft_to_color()
         bins[i] = 0;
     }
 
+    // For the Frequency modes (FFT and EQ), use this as a rough division between low, mid and high bands
+    //  static const uint8_t BAND_START[3] = {0, 20, 56};
+    static const uint8_t BAND_END[3] = {19, 55, 127};
+
     uint8_t current_bin = 0;
-    // Split the bands into roughly low, mid, and high
-    static const uint8_t BAND_END[3] = {19, 59, 127};
     for (int i=0; i<FFT_N/2; i++)
     {
         uint8_t val = output[i];
@@ -346,7 +351,6 @@ void vu_mode()
         strip.setPixelColor(i, Wheel(map(i, 0, strip.numPixels() - 1, 30, 150)));
     }
     
-    
     //Scale the input logarithmically instead of linearly
     uint16_t c = fscale(INPUT_FLOOR, INPUT_CEILING, strip.numPixels(), 0, peakToPeak, 2); 
     
@@ -384,43 +388,45 @@ void eq_mode()
 {
     uint8_t* output = calc_fft_input();
 
-    static const uint8_t FREQ_PER_PIXEL = FFT_N/(2*PIXEL_COUNT);
-
-    static uint16_t bins[PIXEL_COUNT] = { 0 };
-
+    static uint16_t pixels[PIXEL_COUNT];
+    // Clear the pixel values
     for (int i=0; i<PIXEL_COUNT; i++)
     {
-        bins[i] = 0;
+        pixels[i] = 0;
     }
 
-    uint8_t current_bin = 0;
-    for (uint16_t i=0; i<FFT_N/2; i++)
-    {
-        uint8_t val = output[i];
-        
-        bins[current_bin] += GEA(val, 7, GEA(val, 6, GEA(val, 5, GEA(val, 4, GEA(val, 3, GEA(val, 2, GEA(val, 1, 0)))))));
+    // This maps the bands to the pixels
+    static const uint8_t FREQ_PER_PIXEL[3] = {4, 4, 36};
+    static const uint8_t BAND_PIXEL_END[3] = {4, 13, 15};
 
-        // This is a hacky way of splitting up the frequency domains
-        if ((i+1)%FREQ_PER_PIXEL == 0)
+    uint8_t band = 0;
+    uint8_t freq = 0;
+    for (uint8_t current_pixel=0; current_pixel<PIXEL_COUNT; current_pixel++) 
+    {
+        for (int j=0; j<FREQ_PER_PIXEL[band]; j++) 
         {
-            current_bin++;
+            uint8_t val = output[freq];
+            pixels[current_pixel] += GEA(val, 7, GEA(val, 6, GEA(val, 5, GEA(val, 4, GEA(val, 3, GEA(val, 2, GEA(val, 1, 0)))))));
+            freq++;
+        }
+
+        if (current_pixel >= BAND_PIXEL_END[band]) 
+        {
+            band++;
         }
     }
 
-    // Split the bands into roughly low, mid, and high
-    static const uint8_t BAND_END[3] = {2, 8, 16};
-
-    uint8_t band = 0;
+    band = 0;
     for (uint8_t i=0; i<PIXEL_COUNT; i++) 
     {
-        uint16_t val = bins[i];
+        uint16_t val = pixels[i];
 
-        uint16_t r = (val*color_weights[band*3+0]) >> 8;
-        uint16_t g = (val*color_weights[band*3+1]) >> 8;
-        uint16_t b = (val*color_weights[band*3+2]) >> 8;
+        uint16_t r = (val*color_weights[band*3+0]) >> 8 << 1;
+        uint16_t g = (val*color_weights[band*3+1]) >> 8 << 1;
+        uint16_t b = (val*color_weights[band*3+2]) >> 8 << 1;
         strip.setPixelColor(i, uint8_t(r), uint8_t(g), uint8_t(b));
 
-        if (i >= BAND_END[band])
+        if (i >= BAND_PIXEL_END[band])
         {
             band++;
         }
@@ -581,7 +587,7 @@ uint16_t amplitude()
 
 void switch_colors()
 {
-    uint16_t color_idx0 = random(256);
+    color_idx0 = (color_idx0 + 1) % 256;
     uint16_t color_idx1 = (color_idx0 + 85) % 256;
     uint16_t color_idx2 = (color_idx0 + 171) % 256;
 
