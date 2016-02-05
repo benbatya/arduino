@@ -65,9 +65,15 @@ enum class MODE : byte
     MAX = LEN-1
 };
 
+// The current display mode 
 static MODE current_mode = MODE::FFT;
 
-static int32_t prev_time;
+// A standby mode if there's no voice input detected for 30 seconds
+static bool in_standby_mode = false;
+static uint32_t prev_standby_time;
+#define STANDBY_MODE_TIME 2000 // 30000
+
+static uint32_t prev_time;
 static uint16_t color_idx0;
 static uint8_t color_weights[9];
 
@@ -131,6 +137,7 @@ void setup()
     delay(2000);
 
     prev_time = millis();
+    prev_standby_time = prev_time;
 
     // Start the color at a random color
     color_idx0 = random(256);
@@ -142,27 +149,44 @@ void setup()
 void flow_modes();
 void vu_mode();
 void eq_mode();
+void standby_mode();
+
+int16_t* sample();
 
 void loop() 
 {   
-    switch (current_mode) 
+    sample();
+
+    int16_t total_amp = 0;
+    for (int i=0; i<FFT_N; i++) 
     {
-    case MODE::FFT:
-    case MODE::AMP:
-        flow_modes(); 
-        break;
-    case MODE::VU:
-        vu_mode();
-        break;
-    case MODE::EQ:
-        eq_mode();
-        break;
-    default:
-        break;
+        total_amp += fft_input[i*2];
     }
 
-    // Halve the brightness
-    strip.show();  
+    if (in_standby_mode) 
+    {
+        standby_mode();
+    } else
+    {
+        switch (current_mode) 
+        {
+        case MODE::FFT:
+        case MODE::AMP:
+            flow_modes(); 
+            break;
+        case MODE::VU:
+            vu_mode();
+            break;
+        case MODE::EQ:
+            eq_mode();
+            break;
+        default:
+            break;
+        }
+    }
+
+    // Show the strip
+    strip.show();     
 
     uint16_t new_time = millis();
 
@@ -172,6 +196,15 @@ void loop()
         switch_colors();
 
         prev_time = new_time;
+    }
+
+    if (total_amp >= FFT_N*10) 
+    {
+        prev_standby_time = new_time;
+        in_standby_mode = false;
+    } else if(!in_standby_mode && (new_time - prev_standby_time > STANDBY_MODE_TIME))
+    {
+        in_standby_mode = true;
     }
 }
 
@@ -242,8 +275,6 @@ int16_t* sample()
 // Returns an array of uint8_t of size FFT_N/2
 uint8_t* calc_fft_input()
 {
-    sample();
-
     fft_window(); // window the data for better frequency response
     fft_reorder(); // reorder the data before doing the fft
     fft_run(); // process the data in the fft
@@ -295,7 +326,6 @@ uint32_t fft_to_color()
 uint32_t amp_to_color()
 {
     // Linear amplitude display
-    sample();
     int16_t max_val, min_val;
     max_val = min_val = fft_input[0];
     for (int i=1; i<FFT_N; i++)
@@ -354,7 +384,6 @@ uint32_t Wheel(byte WheelPos);
 
 void vu_mode()
 {
-    sample();
     int16_t max_val, min_val;
     max_val = min_val = fft_input[0];
     for (int i=1; i<FFT_N; i++)
@@ -475,6 +504,11 @@ void eq_mode()
     Serial.write(output, FFT_N/2);
 #endif
 
+}
+
+void standby_mode()
+{
+    drawLine(0, PIXEL_COUNT, Wheel(0));
 }
 
 //Used to draw a line between two points of a given color
