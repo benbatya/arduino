@@ -41,7 +41,7 @@
                 Deletable="0"
                 SaveOption="SaveWorkspaceFiles"
                 RunFromDir="%rw">
-                <Exec CmdLine="platformio run -e tie"/>
+                <Exec CmdLine="platformio run -e roof"/>
             </Target>
             <Target
                 Name="Rebuild"
@@ -134,7 +134,7 @@
                 Deletable="0"
                 SaveOption="SaveWorkspaceFiles"
                 RunFromDir="%rw">
-                <Exec CmdLine="platformio run -e tie"/>
+                <Exec CmdLine="platformio run -e roof"/>
             </Target>
             <Target
                 Name="Rebuild"

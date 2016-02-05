@@ -9,7 +9,7 @@ port at 115.2kb.
 
 #define LIN_OUT8 1 // use the log output function
 #define SCALE 256
-#define FFT_N 256 // set to 256 point fft
+#define FFT_N 128 // set to 256 point fft
 
 #define LED_PIN 13
 #define TIME_DELAY 100
@@ -27,6 +27,7 @@ port at 115.2kb.
 #endif
 
 #define DISPLAY_OUTPUT 1
+//#define DISPLAY_AMP 1
 
 #ifndef DISPLAY_OUTPUT
 uint32_t prev_time;
@@ -35,15 +36,17 @@ static uint8_t max_vals[FFT_N/2];
 
 void setup() 
 { 
-//  pinMode(LED_PIN, OUTPUT);
-//  Serial.begin(9600);
+#if DISPLAY_OUTPUT
     Serial.begin(115200); // use the serial port
+#else
+    Serial.begin(9600);
+#endif
 
     analogReference(DEFAULT);
 
-    // Change the prescaler to 16 to get a better sampling rate
+    // Change the prescaler to get a better sampling rate
     ADCSRA &= ~0x07;
-    ADCSRA |= _BV(ADPS2); // prescaler = 16
+    ADCSRA |= _BV(ADPS2) | _BV(ADPS0); // prescaler = 32
 
 #ifndef DISPLAY_OUTPUT
 
@@ -59,173 +62,241 @@ void setup()
 #endif
 
 }
-
-//FPSCounter counter("loop");
-
-//int16_t adjust_val(int16_t val);
-//#define NUM_VALUES 16
-//static int16_t vals[NUM_VALUES];
-//static uint16_t val_index = 0;
-
-//uint8_t log2x16(uint16_t x);
 //
-
-#if DISPLAY_OUTPUT
-
+//#if DISPLAY_OUTPUT
+////#define REMOVE_NOISE 1
+//#endif
+//
+//#if REMOVE_NOISE
+//
 //static const uint8_t PROGMEM noise[128] = {
-//    117, 108, 97, 102, 99, 102, 103, 105, 110, 103, 96, 96, 91, 93, 93, 107
-//    , 111, 101, 87, 87, 85, 79, 87, 104, 105, 85, 80, 79, 68, 68, 79, 96
-//    , 94, 71, 71, 62, 62, 62, 76, 90, 85, 63, 58, 66, 61, 58, 70, 84
-//    , 75, 55, 58, 58, 55, 52, 69, 76, 68, 51, 55, 51, 53, 53, 67, 70
-//    , 57, 48, 50, 52, 47, 47, 60, 64, 54, 50, 51, 47, 45, 48, 56, 59
-//    , 51, 48, 45, 50, 44, 44, 53, 55, 47, 45, 46, 47, 46, 47, 50, 51
-//    , 46, 42, 45, 43, 43, 45, 47, 46, 41, 44, 42, 45, 44, 45, 48, 43
-//    , 43, 42, 43, 45, 43, 44, 46, 45, 41, 41, 45, 45, 41, 43, 43, 43
+//    8, 5, 4, 4, 3, 4, 5, 4, 4, 9, 10, 11, 9, 7, 4, 3
+//    , 3, 3, 3, 3, 3, 5, 10, 12, 8, 6, 4, 3, 2, 2, 2, 2
+//    , 2, 4, 7, 5, 6, 6, 4, 2, 3, 3, 2, 2, 4, 7, 7, 4
+//    , 3, 2, 1, 2, 1, 2, 2, 2, 6, 6, 4, 4, 3, 2, 2, 2
+//    , 2, 2, 1, 4, 6, 5, 2, 2, 2, 2, 2, 2, 2, 1, 3, 6
+//    , 6, 3, 4, 3, 3, 3, 2, 2, 2, 2, 5, 7, 5, 4, 3, 3
+//    , 3, 3, 3, 3, 3, 7, 9, 8, 4, 5, 4, 5, 5, 6, 4, 4
+//    , 5, 7, 8, 5, 6, 6, 4, 3, 3, 4, 3, 3, 2, 3, 3, 4
 //};
-
-static const uint8_t PROGMEM noise[128] = {
-    15, 10, 8, 4, 5, 7, 6, 7, 5, 5, 6, 9, 8, 5, 4, 4
-    , 5, 4, 4, 3, 4, 4, 7, 11, 6, 2, 2, 2, 2, 3, 2, 2
-    , 2, 4, 8, 7, 3, 2, 1, 1, 1, 1, 1, 1, 2, 5, 6, 3
-    , 1, 0, 0, 0, 0, 0, 0, 0, 2, 4, 3, 0, 0, 0, 0, 0
-    , 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
-    , 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0
-    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
-
-#else
-
-static const uint8_t PROGMEM  noise[128] = { 
-    // This is low-level noise that's subtracted from each FFT output column:
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
-#endif
-
-//uint16_t amplitude();
+//
+//
+//#else
+//
+//static const uint8_t PROGMEM  noise[128] = {
+//    // This is low-level noise that's subtracted from each FFT output column:
+//    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+//    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+//    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+//    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+//    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+//    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+//    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+//    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+//};
+//#endif
+//
+//#define INPUT_FLOOR 19 //Lower range of analogRead input
+//#define INPUT_CEILING 600 //Max range of analogRead input, the lower the value the more sensitive (1023 = max)
+//float fscale(float originalMin, float originalMax, float newBegin, float
+//           newEnd, float inputValue, float curve);
+//
+//uint8_t log2x16(uint16_t x);
 
 void loop() 
 {  
-//  while (1) // reduces jitter
+//  uint32_t start_time = micros();
+
+    for (int i = 0; i < FFT_N; i++) // save FFT_N samples
     {
-//      uint32_t start_time = micros();
+        int16_t k = analogRead(MIC_PIN);
 
-        for (int i = 0; i < FFT_N; i++) // save FFT_N samples
-        {
-            int16_t k = analogRead(MIC_PIN);
+        static const int16_t noiseThreshold = 4;
+        k = ((k > (512-noiseThreshold)) &&
+             (k < (512+noiseThreshold))) ? 0 :
+                k - 512; // Sign-convert for FFT; -512 to +511
+        k <<= 6; // form into a 16b signed int
+        fft_input[i*2] = k; // put real data into even bins
+        fft_input[i*2 + 1] = 0; // set odd bins to 0
+    }
 
-            static const int16_t noiseThreshold = 4;
-            k = ((k > (512-noiseThreshold)) &&
-                 (k < (512+noiseThreshold))) ? 0 :
-                    k - 512; // Sign-convert for FFT; -512 to +511
-            k <<= 6; // form into a 16b signed int
-            fft_input[i*2] = k; // put real data into even bins
-            fft_input[i*2 + 1] = 0; // set odd bins to 0
-        }
+//  total += micros() - start_time;
+//  count++;
 
-//      total += micros() - start_time;
-//      count++;
+#if DISPLAY_AMP
 
-        fft_window(); // window the data for better frequency response
-        fft_reorder(); // reorder the data before doing the fft
-        fft_run(); // process the data in the fft
-        FFT_FUNC(); // take the output of the fft
-        
-//      static uint8_t prev_values[FFT_N/2] = {0};
+    int16_t max, min;
+    max = min = fft_input[0];
+    for (int i=1; i<FFT_N; i++)
+    {
+        int16_t val = fft_input[i*2];
+        if (val < min) { min = val; }
+        else if (val > max) { max = val; }
+    }
+    uint16_t diff = max - min;
+    diff >>= 8;
+//  uint16_t diff = max<0 ? -max: max;
+//  uint16_t w = fscale(INPUT_FLOOR, INPUT_CEILING, 0, 255, diff, 2);
+//  uint8_t val = log2x16(diff);
+    uint8_t val = diff;
+
+    for (int i=FFT_N/2-1; i>0; i--) 
+    {
+        FFT_OUTPUT[i] = FFT_OUTPUT[i-1];
+    }
+    FFT_OUTPUT[0] = val;
+
+#else
+    fft_window(); // window the data for better frequency response
+    fft_reorder(); // reorder the data before doing the fft
+    fft_run(); // process the data in the fft
+    FFT_FUNC(); // take the output of the fft
+
+//  for (int i=0; i<FFT_N/2; i++)
+//  {
+//      // Do a temporal filter operation
+//      uint8_t L = pgm_read_byte(&noise[i]);
+//      FFT_OUTPUT[i] = (FFT_OUTPUT[i] <= L) ? 0 : FFT_OUTPUT[i];
+//  }
+#endif  
 
 #if DISPLAY_OUTPUT
 
-        for (int i=0; i<FFT_N/2; i++)
-        {
-            // Do a temporal filter operation
-            uint8_t L = pgm_read_byte(&noise[i]);
-            FFT_OUTPUT[i] = (FFT_OUTPUT[i] <= L) ? 0 : FFT_OUTPUT[i];
-//          int8_t diff = int8_t(fft_log_out[i]) - prev_values[i]; // get the difference
-//          output[i] = (diff > 70) ? 0: fft_log_out[i];  // make sure that the difference between the
-        }
-//
-//      memcpy(prev_values, fft_log_out, FFT_N/2);
-
-        Serial.write(255); // send a start byte
-        Serial.write(FFT_OUTPUT, FFT_N/2); // send out the data
-//      Serial.write(output, FFT_N/2); // send out the data
+    Serial.write(255); // send a start byte
+    Serial.write(FFT_OUTPUT, FFT_N/2); // send out the data
+//  Serial.write(output, FFT_N/2); // send out the data
 
 #else
 
-//      if (count > 50)
-//      {
-//          float avg = float(total) / count;
-//          total = 0;
-//          count = 0;
-//          Serial.print("average time = "); Serial.print(avg);
-//          float hz = avg / FFT_N;
-//          hz = 1000000.0f/hz;
-//          Serial.print(", Hz = "); Serial.println(hz);
-//      }
+//  if (count > 50)
+//  {
+//      float avg = float(total) / count;
+//      total = 0;
+//      count = 0;
+//      Serial.print("average time = "); Serial.print(avg);
+//      float hz = avg / FFT_N;
+//      hz = 1000000.0f/hz;
+//      Serial.print(", Hz = "); Serial.println(hz);
+//  }
 
+    for (int i=0; i<FFT_N/2; i++)
+    {
+        if (max_vals[i] < FFT_OUTPUT[i])
+        {
+            max_vals[i] = FFT_OUTPUT[i];
+        }
+    }
+
+    if (millis() - prev_time > 1000)
+    {
+        Serial.print("static const uint8_t PROGMEM noise["); Serial.print(FFT_N/2); Serial.print("] = {");
+        const char* sep = "";
         for (int i=0; i<FFT_N/2; i++)
         {
-            if (max_vals[i] < FFT_OUTPUT[i])
+            if (i%32 == 0)
             {
-                max_vals[i] = FFT_OUTPUT[i];
+                Serial.println(""); Serial.print("    ");
             }
+            Serial.print(sep); Serial.print(max_vals[i]);
+            sep = ", ";
         }
-
-        if (millis() - prev_time > 5000)
-        {
-            Serial.print("static const uint8_t PROGMEM noise["); Serial.print(FFT_N/2); Serial.print("] = {");
-            const char* sep = "";
-            for (int i=0; i<FFT_N/2; i++)
-            {
-                if (i%16 == 0)
-                {
-                    Serial.println(""); Serial.print("    ");
-                }
-                Serial.print(sep); Serial.print(max_vals[i]);
-                sep = ", ";
-            }
-            Serial.println(""); Serial.println("};");
-            prev_time = millis();
-        }
+        Serial.println(""); Serial.println("};");
+        prev_time = millis();
+    }
 #endif
 
-//      Serial.flush();
-    }
+//  Serial.flush();
 }
 
-//uint16_t amplitude()
+//float fscale(float originalMin, float originalMax, float newBegin, float
+//             newEnd, float inputValue, float curve)
 //{
-//    static const uint16_t sampleWindow = 50; // Sample window width in mS (50 mS = 20Hz)
-//    uint32_t startMillis = micros();  // Start of sample window
 //
-//    uint16_t signalMax = 0;
-//    uint16_t signalMin = 1024;
+//    float OriginalRange = 0;
+//    float NewRange = 0;
+//    float zeroRefCurVal = 0;
+//    float normalizedCurVal = 0;
+//    float rangedValue = 0;
+//    boolean invFlag = 0;
 //
-//    // collect data for 50 mS
-//    while (micros() - startMillis < sampleWindow)
+//
+//    // condition curve parameter
+//    // limit range
+//
+//    if (curve > 10) curve = 10;
+//    if (curve < -10) curve = -10;
+//
+//    curve = (curve * -.1); // - invert and scale - this seems more intuitive - postive numbers give more weight to high end on output
+//    curve = pow(10, curve); // convert linear scale into lograthimic exponent for other pow function
+//
+//    /*
+//     Serial.println(curve * 100, DEC);   // multply by 100 to preserve resolution
+//     Serial.println();
+//     */
+//
+//    // Check for out of range inputValues
+//    if (inputValue < originalMin)
 //    {
-//        uint16_t sample = analogRead(MIC_PIN);
-//        if (sample < 1024)  // toss out spurious readings
-//        {
-//            if (sample > signalMax)
-//            {
-//                signalMax = sample;  // save just the max levels
-//            }
-//            else if (sample < signalMin)
-//            {
-//                signalMin = sample;  // save just the min levels
-//            }
-//        }
+//        inputValue = originalMin;
+//    }
+//    if (inputValue > originalMax)
+//    {
+//        inputValue = originalMax;
 //    }
 //
-//    uint16_t peakToPeak = signalMax - signalMin;  // max - min = peak-peak amplitude
-//    return peakToPeak;
+//    // Zero Refference the values
+//    OriginalRange = originalMax - originalMin;
+//
+//    if (newEnd > newBegin)
+//    {
+//        NewRange = newEnd - newBegin;
+//    }
+//    else
+//    {
+//        NewRange = newBegin - newEnd;
+//        invFlag = 1;
+//    }
+//
+//    zeroRefCurVal = inputValue - originalMin;
+//    normalizedCurVal  =  zeroRefCurVal / OriginalRange;   // normalize to 0 - 1 float
+//
+//    // Check for originalMin > originalMax  - the math for all other cases i.e. negative numbers seems to work out fine
+//    if (originalMin > originalMax)
+//    {
+//        return 0;
+//    }
+//
+//    if (invFlag == 0)
+//    {
+//        rangedValue =  (pow(normalizedCurVal, curve) * NewRange) + newBegin;
+//
+//    }
+//    else     // invert the ranges
+//    {
+//        rangedValue =  newBegin - (pow(normalizedCurVal, curve) * NewRange);
+//    }
+//
+//    return rangedValue;
+//}
+//
+//// From http://www.avrfreaks.net/comment/567704#comment-567704
+//// Table 16*(Log2(1) thru Log2(2)), 16 values
+//static const uint8_t Log2Table[16]={ 0,2,3,4,5,6,7,8,9,10,11,12,13,14,14,15 };
+//
+//// Log2(x)*16 , so log2x16(65535) = 255
+//uint8_t log2x16(uint16_t x){
+//    int8_t v;
+//    if(x<2) return 0;
+//    v=240; // 16*log2(2^15)=240
+//    // shift until most significant bit is set,
+//    // each bit-shift results in log += 16
+//    while ((x&0x8000)==0) {
+//        x=x<<1 ; v -= 16;
+//    }
+//    // x has now form 1iii ixxx xxxx xxxx
+//    // get the next 4 bits =iiii and address table with it
+//    uint8_t i=(x>>11) & 0xf ;
+//    v += Log2Table[i] ;
+//    return v ;
 //}
 

@@ -144,7 +144,9 @@ void eq_mode();
 void loop() 
 {   
 #ifdef DEBUG
-    eq_mode();
+    vu_mode();
+    strip.setBrightness(127);
+    strip.show(); 
 #else
     switch (current_mode) 
     {
@@ -225,6 +227,7 @@ uint16_t amplitude();
 
 // start Mode::FFT functionality
 
+#if PIXEL_COUNT == 16
 // This is low-level noise that's subtracted from each FFT output column:
 static const uint8_t PROGMEM noise[128] = {
     15, 10, 8, 4, 5, 7, 6, 7, 5, 5, 6, 9, 8, 5, 4, 4
@@ -236,6 +239,21 @@ static const uint8_t PROGMEM noise[128] = {
     , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
+
+#else
+
+static const uint8_t PROGMEM noise[128] = {
+    8, 5, 4, 4, 3, 4, 5, 4, 4, 9, 10, 11, 9, 7, 4, 3
+    , 3, 3, 3, 3, 3, 5, 10, 12, 8, 6, 4, 3, 2, 2, 2, 2
+    , 2, 4, 7, 5, 6, 6, 4, 2, 3, 3, 2, 2, 4, 7, 7, 4
+    , 3, 2, 1, 2, 1, 2, 2, 2, 6, 6, 4, 4, 3, 2, 2, 2
+    , 2, 2, 1, 4, 6, 5, 2, 2, 2, 2, 2, 2, 2, 1, 3, 6
+    , 6, 3, 4, 3, 3, 3, 2, 2, 2, 2, 5, 7, 5, 4, 3, 3
+    , 3, 3, 3, 3, 3, 7, 9, 8, 4, 5, 4, 5, 5, 6, 4, 4
+    , 5, 7, 8, 5, 6, 6, 4, 3, 3, 4, 3, 3, 2, 3, 3, 4
+};
+
+#endif
 
 // Returns an array of uint8_t of size FFT_N/2
 uint8_t* calc_fft_input()
@@ -396,8 +414,13 @@ void eq_mode()
     }
 
     // This maps the bands to the pixels
+#if PIXEL_COUNT == 16
     static const uint8_t FREQ_PER_PIXEL[3] = {4, 4, 36};
     static const uint8_t BAND_PIXEL_END[3] = {4, 13, 15};
+#else
+    static const uint8_t FREQ_PER_PIXEL[3] = {4, 4, 36};
+    static const uint8_t BAND_PIXEL_END[3] = {20, , 15};
+#endif
 
     uint8_t band = 0;
     uint8_t freq = 0;
