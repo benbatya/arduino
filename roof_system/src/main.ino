@@ -198,11 +198,11 @@ void flow_modes()
 
     static uint32_t prev_colors[PIXEL_COUNT] = {0};
     // move each color down
-    for (uint16_t i=0; i<PIXEL_COUNT-1; i++)
+    for (uint16_t i=PIXEL_COUNT-1; i>0; i--)
     {
-        prev_colors[i] = prev_colors[i+1];
+        prev_colors[i] = prev_colors[i-1];
     }
-    prev_colors[PIXEL_COUNT-1] = color;
+    prev_colors[0] = color;
     // update the pixel colors
     for (uint16_t i=0; i<PIXEL_COUNT; i++) 
     {
