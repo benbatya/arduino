@@ -145,7 +145,7 @@ void loop()
 {   
 #ifdef DEBUG
     vu_mode();
-    strip.setBrightness(127);
+//  strip.setBrightness(127);
     strip.show(); 
 #else
     switch (current_mode) 
@@ -223,7 +223,6 @@ void flow_modes()
 
 float fscale(float originalMin, float originalMax, float newBegin, float
              newEnd, float inputValue, float curve);
-//uint16_t amplitude();
 //
 //// start Mode::FFT functionality
 //
@@ -386,7 +385,6 @@ uint32_t Wheel(byte WheelPos);
 
 void vu_mode()
 {
-//  float peakToPeak = amplitude();
     sample();
     int16_t max_val, min_val;
     max_val = min_val = fft_input[0];
@@ -397,6 +395,7 @@ void vu_mode()
         else if (val > max_val) { max_val = val; }
     }
     uint16_t w = max_val - min_val;
+    w >>= 6;
 
     //Fill the strip with rainbow gradient
     for (uint16_t i = 0; i <= strip.numPixels() - 1; i++) 
@@ -612,35 +611,6 @@ uint32_t Wheel(byte WheelPos)
         WheelPos -= 170; 
         return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
     }
-}
-
-uint16_t amplitude()
-{
-    static const uint16_t sampleWindow = 50; // Sample window width in mS (50 mS = 20Hz)
-    uint32_t startMillis = millis();  // Start of sample window
-
-    uint16_t signalMax = 0;
-    uint16_t signalMin = 1024;
-
-    // collect data for 50 mS
-    while (millis() - startMillis < sampleWindow)
-    {
-        uint16_t sample = analogRead(MIC_PIN);
-        if (sample < 1024)  // toss out spurious readings
-        {
-            if (sample > signalMax)
-            {
-                signalMax = sample;  // save just the max levels
-            }
-            else if (sample < signalMin)
-            {
-                signalMin = sample;  // save just the min levels
-            }
-        }
-    }
-
-    uint16_t peakToPeak = signalMax - signalMin;  // max - min = peak-peak amplitude
-    return peakToPeak;
 }
 
 void switch_colors()
