@@ -267,6 +267,8 @@ int16_t* sample()
         fft_input[i] = k; // put real data into even bins
         fft_input[i + 1] = 0; // set odd bins to 0
     }
+
+    return fft_input;
 }
 
 // Returns an array of uint8_t of size FFT_N/2
@@ -478,9 +480,11 @@ void eq_mode()
     {
         uint16_t val = pixels[i];
 
-        uint16_t r = (val*color_weights[band*3+0]) >> 8 << 1;
-        uint16_t g = (val*color_weights[band*3+1]) >> 8 << 1;
-        uint16_t b = (val*color_weights[band*3+2]) >> 8 << 1;
+#define SHIFT_AMOUNT    (4) // 8-4
+
+        uint16_t r = (val*color_weights[band*3+0]) >> SHIFT_AMOUNT;
+        uint16_t g = (val*color_weights[band*3+1]) >> SHIFT_AMOUNT;
+        uint16_t b = (val*color_weights[band*3+2]) >> SHIFT_AMOUNT;
         strip.setPixelColor(i, uint8_t(r), uint8_t(g), uint8_t(b));
 
         if (i >= BAND_PIXEL_END[band])
