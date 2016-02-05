@@ -345,20 +345,10 @@ uint32_t amp_to_color()
         else if (val > max_val) { max_val = val; }
     }
     uint16_t w = max_val - min_val;
-    w >>= 8;
-
-    w = w<10 ? 0 : w;
-
-//  uint16_t diff = max<0 ? -max: max;
-//  uint16_t w = fscale(INPUT_FLOOR, INPUT_CEILING, 0, 255, diff, 2);
-//  uint8_t val = log2x16(diff);
-//  uint8_t val = diff;
-
-//  uint16_t amp = amplitude();
-
 
     //Scale the input logarithmically instead of linearly
-//  uint16_t w = fscale(INPUT_FLOOR, INPUT_CEILING, 0, 255, amp, 2);
+    w >>= 6;
+    w = fscale(INPUT_FLOOR, INPUT_CEILING, 0, 255, w, 2);
 
     uint16_t r = (w*color_weights[0]) >> 8;
     uint16_t g = (w*color_weights[1]) >> 8;
