@@ -71,7 +71,8 @@ static MODE current_mode = MODE::FFT;
 // A standby mode if there's no voice input detected for 30 seconds
 static bool in_standby_mode = false;
 static uint32_t prev_standby_time;
-#define STANDBY_MODE_TIME 2000 // 30000
+#define STANDBY_MODE_TIME 30000
+#define STANDBY_TRIGGER_AMOUNT (FFT_N*120)  // Multiplier found empirically
 
 static uint32_t prev_time;
 static uint16_t color_idx0;
@@ -111,6 +112,7 @@ void setup()
 
         EEPROM.write(EEPROM_address, byte(current_mode));
     }
+#endif
 
     // Show a red pixel for 2 seconds if we are displaying AMP mode
     switch (current_mode) 
@@ -143,7 +145,6 @@ void setup()
     color_idx0 = random(256);
     // Init the color weights
     switch_colors();
-#endif
 }
 
 void flow_modes();
@@ -157,10 +158,10 @@ void loop()
 {   
     sample();
 
-    int16_t total_amp = 0;
+    uint32_t total_amp = 0;
     for (int i=0; i<FFT_N; i++) 
     {
-        total_amp += fft_input[i*2];
+        total_amp += abs(fft_input[i*2]);
     }
 
     if (in_standby_mode) 
@@ -196,9 +197,13 @@ void loop()
         switch_colors();
 
         prev_time = new_time;
+
+#if 0 // DEBUG
+        Serial.print("total_amp = "); Serial.println(total_amp);
+#endif
     }
 
-    if (total_amp >= FFT_N*10) 
+    if (total_amp >= STANDBY_TRIGGER_AMOUNT) 
     {
         prev_standby_time = new_time;
         in_standby_mode = false;
@@ -237,11 +242,13 @@ void flow_modes()
         strip.setPixelColor(i, prev_colors[i]);
     }  
 
+#if 0 // DEBUG
 //      Serial.write(255); // send a start byte
 //      Serial.write(bins, 3); // send out the data
 //      Serial.flush();
 
 //      delay(200);
+#endif
 }
 
 // Shared static functions and data
@@ -339,7 +346,7 @@ uint32_t amp_to_color()
     //Scale the input logarithmically instead of linearly
     w = fscale(1000, 32000, 0, 255, w, 2);
 
-#if DEBUG
+#if 0 // DEBUG
     uint16_t new_time = millis();
 
     // Switch every SWITCH_TIME
@@ -491,7 +498,7 @@ void eq_mode()
         }
     }
 
-#ifdef DEBUG
+#if 0 // DEBUG
     Serial.write(255);
 
 //  static uint8_t data[PIXEL_COUNT];
@@ -508,7 +515,23 @@ void eq_mode()
 
 void standby_mode()
 {
-    drawLine(0, PIXEL_COUNT, Wheel(0));
+    static const uint16_t wait = 50;
+    static uint8_t q = 0;
+    static uint8_t color = 0;
+
+    delay(wait);
+
+    drawLine(0, PIXEL_COUNT, 0);
+
+    //Theatre-style crawling lights with rainbow effect
+    for (int i=0; i < strip.numPixels(); i=i+3) {
+        uint32_t c = Wheel( (i+color) % 255);
+        strip.setPixelColor(i+q, c);    //turn every third pixel on
+        strip.setPixelColor(i+q+1, c);    //turn every third pixel on
+    } 
+   
+    q = (q+1) % 3;
+    color = (color+1);
 }
 
 //Used to draw a line between two points of a given color
