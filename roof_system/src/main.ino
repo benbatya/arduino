@@ -525,7 +525,7 @@ void standby_mode()
 
     //Theatre-style crawling lights with rainbow effect
     for (int i=0; i < strip.numPixels(); i=i+3) {
-        uint32_t c = Wheel( (i+color) % 255);
+        uint32_t c = Wheel( (i+color) % 255 );
         strip.setPixelColor(i+q, c);    //turn every third pixel on
         strip.setPixelColor(i+q+1, c);    //turn every third pixel on
     } 
