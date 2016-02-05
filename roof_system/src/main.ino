@@ -145,7 +145,6 @@ void loop()
 {   
 #ifdef DEBUG
     vu_mode();
-//  strip.setBrightness(127);
     strip.show(); 
 #else
     switch (current_mode) 
@@ -165,7 +164,6 @@ void loop()
     }
 
     // Halve the brightness
-//  strip.setBrightness(127);
     strip.show();  
 
     uint16_t new_time = millis();
@@ -226,33 +224,6 @@ float fscale(float originalMin, float originalMax, float newBegin, float
 //
 //// start Mode::FFT functionality
 //
-//#if PIXEL_COUNT == 16
-//// This is low-level noise that's subtracted from each FFT output column:
-//static const uint8_t PROGMEM noise[128] = {
-//    15, 10, 8, 4, 5, 7, 6, 7, 5, 5, 6, 9, 8, 5, 4, 4
-//    , 5, 4, 4, 3, 4, 4, 7, 11, 6, 2, 2, 2, 2, 3, 2, 2
-//    , 2, 4, 8, 7, 3, 2, 1, 1, 1, 1, 1, 1, 2, 5, 6, 3
-//    , 1, 0, 0, 0, 0, 0, 0, 0, 2, 4, 3, 0, 0, 0, 0, 0
-//    , 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
-//    , 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0
-//    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-//    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-//};
-//
-//#else
-//
-//static const uint8_t PROGMEM noise[128] = {
-//    8, 5, 4, 4, 3, 4, 5, 4, 4, 9, 10, 11, 9, 7, 4, 3
-//    , 3, 3, 3, 3, 3, 5, 10, 12, 8, 6, 4, 3, 2, 2, 2, 2
-//    , 2, 4, 7, 5, 6, 6, 4, 2, 3, 3, 2, 2, 4, 7, 7, 4
-//    , 3, 2, 1, 2, 1, 2, 2, 2, 6, 6, 4, 4, 3, 2, 2, 2
-//    , 2, 2, 1, 4, 6, 5, 2, 2, 2, 2, 2, 2, 2, 1, 3, 6
-//    , 6, 3, 4, 3, 3, 3, 2, 2, 2, 2, 5, 7, 5, 4, 3, 3
-//    , 3, 3, 3, 3, 3, 7, 9, 8, 4, 5, 4, 5, 5, 6, 4, 4
-//    , 5, 7, 8, 5, 6, 6, 4, 3, 3, 4, 3, 3, 2, 3, 3, 4
-//};
-//
-//#endif
 
 int16_t* sample()
 {
@@ -281,13 +252,6 @@ uint8_t* calc_fft_input()
     fft_run(); // process the data in the fft
     FFT_FUNC(); // take the output of the fft
     
-//  for (int i=0; i<FFT_N/2; i++)
-//  {
-//      // Do a temporal filter operation
-//      uint8_t L = pgm_read_byte(&noise[i]);
-//      FFT_OUTPUT[i] = (FFT_OUTPUT[i] <= L) ? 0 : FFT_OUTPUT[i];
-//  }
-
     return FFT_OUTPUT;
 }
 
@@ -303,7 +267,6 @@ uint32_t fft_to_color()
     }
 
     // For the Frequency modes (FFT and EQ), use this as a rough division between low, mid and high bands
-    //  static const uint8_t BAND_START[3] = {0, 20, 56};
     static const uint8_t BAND_END[3] = {9, 27, 63};
 
     uint8_t current_bin = 0;
@@ -366,12 +329,6 @@ uint32_t amp_to_color()
 #define PEAK_HANG 24 //Time of pause before peak dot falls
 #define PEAK_FALL 4 //Rate of falling peak dot
 
-byte peak = 16;      // Peak level of column; used for falling dots
-//unsigned int sample;
-
-byte dotCount = 0;  //Frame counter for peak dot
-byte dotHangCount = 0; //Frame counter for holding peak dot
-
 void drawLine(uint8_t from, uint8_t to, uint32_t c);
 uint32_t Wheel(byte WheelPos);
 
@@ -398,6 +355,10 @@ void vu_mode()
     //Scale the input logarithmically instead of linearly
     uint16_t c = fscale(INPUT_FLOOR, INPUT_CEILING, strip.numPixels(), 0, w, 2); 
     
+    static byte peak = 16;      // Peak level of column; used for falling dots
+    static byte dotCount = 0;  //Frame counter for peak dot
+    static byte dotHangCount = 0; //Frame counter for holding peak dot
+
     if (c < peak) 
     {
         peak = c;        // Keep dot on top
