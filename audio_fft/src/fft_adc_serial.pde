@@ -152,6 +152,7 @@ void loop()
     fft_run(); // process the data in the fft
     FFT_FUNC(); // take the output of the fft
 
+    // NOTE: I only could remove the noise filters after turning down the gain to zero.
 //  for (int i=0; i<FFT_N/2; i++)
 //  {
 //      // Do a temporal filter operation
