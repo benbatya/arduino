@@ -43,7 +43,7 @@
                 SaveOption="SaveWorkspaceFiles"
                 RunFromDir="%rw"
                 ClearProcessBuffer="1">
-                <Exec CmdLine="platformio run -e tie"/>
+                <Exec CmdLine="platformio run -e roof"/>
             </Target>
             <Target
                 Name="Rebuild"
@@ -137,7 +137,7 @@
                 SaveOption="SaveWorkspaceFiles"
                 RunFromDir="%rw"
                 ClearProcessBuffer="1">
-                <Exec CmdLine="platformio run -e tie"/>
+                <Exec CmdLine="platformio run -e roof"/>
             </Target>
             <Target
                 Name="Rebuild"
@@ -198,14 +198,10 @@
             Name="Source Files"
             Filters="*.c;*.C;*.cc;*.cpp;*.cp;*.cxx;*.c++;*.prg;*.pas;*.dpr;*.asm;*.s;*.bas;*.java;*.cs;*.sc;*.e;*.cob;*.html;*.rc;*.tcl;*.py;*.pl;*.d;*.m;*.mm;*.go">
             <F N="src/fft_adc_serial.pde"/>
-            <F N="src/fps_counter.cpp"/>
         </Folder>
         <Folder
             Name="Header Files"
-            Filters="*.h;*.H;*.hh;*.hpp;*.hxx;*.inc;*.sh;*.cpy;*.if">
-            <F N="lib/FFT/FFT.h"/>
-            <F N="src/fps_counter.hpp"/>
-        </Folder>
+            Filters="*.h;*.H;*.hh;*.hpp;*.hxx;*.inc;*.sh;*.cpy;*.if"></Folder>
         <Folder
             Name="Resource Files"
             Filters="*.ico;*.cur;*.dlg"/>
