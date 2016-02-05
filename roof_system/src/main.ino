@@ -344,42 +344,42 @@ void vu_mode()
         else if (val > max_val) { max_val = val; }
     }
     uint16_t w = max_val - min_val;
-    w >>= 6;
-
-    //Fill the strip with rainbow gradient
-    for (uint16_t i = 0; i <= strip.numPixels() - 1; i++) 
-    {
-        strip.setPixelColor(i, Wheel(map(i, 0, strip.numPixels() - 1, 30, 150)));
-    }
+    w >>= (6-2);
     
     //Scale the input logarithmically instead of linearly
-    uint16_t c = fscale(INPUT_FLOOR, INPUT_CEILING, strip.numPixels(), 0, w, 2); 
-    
+    uint16_t c = fscale(INPUT_FLOOR, INPUT_CEILING, 0, strip.numPixels(), w, 2); 
+
     static byte peak = 16;      // Peak level of column; used for falling dots
     static byte dotCount = 0;  //Frame counter for peak dot
     static byte dotHangCount = 0; //Frame counter for holding peak dot
 
-    if (c < peak) 
+    if (c >= peak) 
     {
         peak = c;        // Keep dot on top
         dotHangCount = 0;    // make the dot hang before falling
     }
-    if (c <= strip.numPixels()) // Fill partial column with off pixels
+    
+    const uint8_t bottom_color = 30;
+    const uint8_t top_color = 150;
+
+    //Fill the strip with rainbow gradient
+    for (uint16_t i = 0; i < c; i++) 
     {
-        drawLine(strip.numPixels(), strip.numPixels() - c, strip.Color(0, 0, 0));
+
+        strip.setPixelColor(i, Wheel((map(i, 0, strip.numPixels() - 1, bottom_color, top_color) + color_idx0) % 256));
     }
+    // Fill the rest with black
+    drawLine(c, strip.numPixels(), strip.Color(0, 0, 0));
     
     // Set the peak dot to match the rainbow gradient
-    uint16_t y = strip.numPixels() - peak; 
-    
-    strip.setPixelColor(y - 1, Wheel(map(y, 0, strip.numPixels() - 1, 30, 150))); 
+    strip.setPixelColor(peak, Wheel((map(peak, 0, strip.numPixels() - 1, bottom_color, top_color) + color_idx0) % 256)); 
     
     // Frame based peak dot animation
     if (dotHangCount > PEAK_HANG) //Peak pause length
     {
         if (++dotCount >= PEAK_FALL) //Fall rate 
         {
-            peak++; 
+            peak--; 
             dotCount = 0;
         }
     } 
@@ -469,7 +469,7 @@ void drawLine(uint8_t from, uint8_t to, uint32_t c)
         from = to; 
         to = fromTemp;
     }
-    for (int i = from; i <= to; i++) 
+    for (int i = from; i < to; i++) 
     {
         strip.setPixelColor(i, c);
     }
