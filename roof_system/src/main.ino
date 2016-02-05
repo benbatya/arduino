@@ -88,7 +88,9 @@ void setup()
     randomSeed(analogRead(0));
 
 #ifdef DEBUG 
-    Serial.begin(115200); // use the serial port
+    Serial.begin(9600); // use the serial port
+//  Serial.begin(115200); // use the serial port
+    current_mode = MODE::AMP;
 #else
     if (EEPROM.length() > 0)  // Only try to use EEPROM if there is some on the board
     {
@@ -143,10 +145,6 @@ void eq_mode();
 
 void loop() 
 {   
-#ifdef DEBUG
-    vu_mode();
-    strip.show(); 
-#else
     switch (current_mode) 
     {
     case MODE::FFT:
@@ -175,7 +173,6 @@ void loop()
 
         prev_time = new_time;
     }
-#endif
 }
 
 
@@ -283,9 +280,9 @@ uint32_t fft_to_color()
         }
     }
 
-    uint16_t r = (bins[0]*color_weights[0] + bins[1]*color_weights[1] + bins[2]*color_weights[2]) >> 8;
-    uint16_t g = (bins[0]*color_weights[3] + bins[1]*color_weights[4] + bins[2]*color_weights[5]) >> 8;
-    uint16_t b = (bins[0]*color_weights[6] + bins[1]*color_weights[7] + bins[2]*color_weights[8]) >> 8;
+    uint16_t r = (bins[0]*color_weights[0] + bins[1]*color_weights[1] + bins[2]*color_weights[2]) >> (8-2);
+    uint16_t g = (bins[0]*color_weights[3] + bins[1]*color_weights[4] + bins[2]*color_weights[5]) >> (8-2);
+    uint16_t b = (bins[0]*color_weights[6] + bins[1]*color_weights[7] + bins[2]*color_weights[8]) >> (8-2);
 
     uint32_t new_color = Adafruit_NeoPixel::Color(uint8_t(r), uint8_t(g), uint8_t(b));
     return new_color;
@@ -310,17 +307,40 @@ uint32_t amp_to_color()
     uint16_t w = max_val - min_val;
 
     //Scale the input logarithmically instead of linearly
-    w >>= 6;
-    w = fscale(INPUT_FLOOR, INPUT_CEILING, 0, 255, w, 2);
+    w = fscale(1000, 32000, 0, 255, w, 2);
 
-    uint16_t r = (w*color_weights[0]) >> 8;
-    uint16_t g = (w*color_weights[1]) >> 8;
-    uint16_t b = (w*color_weights[2]) >> 8;
+#if DEBUG
+    uint16_t new_time = millis();
 
-//  Serial.print("final = "); Serial.println(g);
+    // Switch every SWITCH_TIME
+    if ((new_time - prev_time) > (SWITCH_TIME-10))
+    {
+        Serial.print("AMP mode: value = "); Serial.println(w);
+    }
+#endif
+
+    uint16_t r;
+    uint16_t g;
+    uint16_t b;
+
+    if (w > 150) 
+    {
+        r = (w*color_weights[0]) >> 8;
+        g = (w*color_weights[1]) >> 8;
+        b = (w*color_weights[2]) >> 8;
+    } else if( w > 45)
+    {
+        r = (w*color_weights[3]) >> 8;
+        g = (w*color_weights[4]) >> 8;
+        b = (w*color_weights[5]) >> 8;
+    } else
+    {
+        r = (w*color_weights[6]) >> 8;
+        g = (w*color_weights[7]) >> 8;
+        b = (w*color_weights[8]) >> 8;
+    }
 
     return Adafruit_NeoPixel::Color(uint8_t(r), uint8_t(g), uint8_t(b));
-//  return Adafruit_NeoPixel::Color(uint8_t(w), uint8_t(w), uint8_t(w));
 }
 
 // start MODE::VU code
@@ -431,11 +451,9 @@ void eq_mode()
     {
         uint16_t val = pixels[i];
 
-#define SHIFT_AMOUNT    (4) // 8-4
-
-        uint16_t r = (val*color_weights[band*3+0]) >> SHIFT_AMOUNT;
-        uint16_t g = (val*color_weights[band*3+1]) >> SHIFT_AMOUNT;
-        uint16_t b = (val*color_weights[band*3+2]) >> SHIFT_AMOUNT;
+        uint16_t r = (val*color_weights[band*3+0]) >> (8-4);
+        uint16_t g = (val*color_weights[band*3+1]) >> (8-4);
+        uint16_t b = (val*color_weights[band*3+2]) >> (8-4);
         strip.setPixelColor(i, uint8_t(r), uint8_t(g), uint8_t(b));
 
         if (i >= BAND_PIXEL_END[band])
@@ -536,8 +554,7 @@ float fscale(float originalMin, float originalMax, float newBegin, float
     
     if (invFlag == 0) 
     {
-        rangedValue =  (pow(normalizedCurVal, curve) * NewRange) + newBegin;
-        
+        rangedValue =  (pow(normalizedCurVal, curve) * NewRange) + newBegin;        
     }
     else     // invert the ranges
     {
