@@ -197,16 +197,26 @@
             Name="Source Files"
             Filters="*.c;*.C;*.cc;*.cpp;*.cp;*.cxx;*.c++;*.prg;*.pas;*.dpr;*.asm;*.s;*.bas;*.java;*.cs;*.sc;*.e;*.cob;*.html;*.rc;*.tcl;*.py;*.pl;*.d;*.m;*.mm;*.go">
             <F N="src/main.ino"/>
+            <F N="src/packetParser.cpp"/>
         </Folder>
         <Folder
             Name="Header Files"
             Filters="*.h;*.H;*.hh;*.hpp;*.hxx;*.inc;*.sh;*.cpy;*.if">
+            <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BLE.h"/>
+            <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BluefruitLE_SPI.h"/>
+            <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BluefruitLE_UART.h"/>
             <F N="../lib/Adafruit_NeoPixel/Adafruit_NeoPixel.h"/>
+            <F N="src/BluefruitConfig.h"/>
             <F N="../lib/FFT/FFT.h"/>
+            <F N="src/util_funcs.hpp"/>
         </Folder>
         <Folder
             Name="Resource Files"
-            Filters="*.ico;*.cur;*.dlg"/>
+            Filters="*.ico;*.cur;*.dlg">
+            <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BLE.cpp"/>
+            <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BluefruitLE_SPI.cpp"/>
+            <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BluefruitLE_UART.cpp"/>
+        </Folder>
         <Folder
             Name="Bitmaps"
             Filters="*.bmp"/>

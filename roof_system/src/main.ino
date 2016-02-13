@@ -24,8 +24,11 @@
 #include <Adafruit_NeoPixel.h>
 
 #include <EEPROM.h>
+static const int EEPROM_address = 0;
 
-//#define DEBUG 1
+#include "BluefruitConfig.h"
+
+#include "util_funcs.hpp"
 
 #ifndef MIC_PIN
 #   define MIC_PIN 2
@@ -39,7 +42,7 @@
 #   define PIXEL_COUNT 60 // Num of pixels in strip
 #endif
 
-#define SWITCH_TIME 500
+uint32_t SWITCH_TIME = 500;
 
 #define GEA(val, exp, el) ((val >= 1<<exp) ? exp : el) 
 
@@ -78,10 +81,13 @@ static uint32_t prev_time;
 static uint16_t color_idx0;
 static uint8_t color_weights[9];
 
+void update_weights(uint32_t color0, uint32_t color1, uint32_t color2);
 void switch_colors();
 
 void setup() 
 { 
+    CONFIG();
+
     // Change the prescaler to get a better sampling rate
     ADCSRA &= ~0x07;
     ADCSRA |= _BV(ADPS2) | _BV(ADPS0); // prescaler = 32
@@ -95,14 +101,10 @@ void setup()
     randomSeed(analogRead(0));
 
 #ifdef DEBUG 
-    Serial.begin(9600); // use the serial port
-//  Serial.begin(115200); // use the serial port
     current_mode = MODE::AMP;
 #else
     if (EEPROM.length() > 0)  // Only try to use EEPROM if there is some on the board
     {
-        static const int EEPROM_address = 0;
-
         // Get the previous mode. If it's valid, set current_mode the next mode % MODE::LEN
         MODE value = MODE(EEPROM.read(EEPROM_address));
         if (MODE::MIN <= value && value <= MODE::MAX) 
@@ -110,9 +112,13 @@ void setup()
             current_mode = MODE((uint8_t(value)+1) % uint8_t(MODE::LEN));
         }
 
-        EEPROM.write(EEPROM_address, byte(current_mode));
+        EEPROM.update(EEPROM_address, byte(current_mode));
     }
+
 #endif
+
+    // Setup the ble
+    ble_setup();
 
     // Show a red pixel for 2 seconds if we are displaying AMP mode
     switch (current_mode) 
@@ -198,9 +204,8 @@ void loop()
 
         prev_time = new_time;
 
-#if 0 // DEBUG
-        Serial.print("total_amp = "); Serial.println(total_amp);
-#endif
+//      PRINT(F("total_amp = "));
+//      PRINT(total_amp);
     }
 
     if (total_amp >= STANDBY_TRIGGER_AMOUNT) 
@@ -210,6 +215,27 @@ void loop()
     } else if(!in_standby_mode && (new_time - prev_standby_time > STANDBY_MODE_TIME))
     {
         in_standby_mode = true;
+    }
+
+    if( ble_update() )
+    {
+        uint32_t color;
+        if (ble_get_color(color)) 
+        {
+            update_weights(color, color, color);
+
+            SWITCH_TIME = 0xffffffff; // never switch
+            prev_time = new_time;
+        } 
+
+        uint8_t button;
+        bool pressed;
+        if(ble_get_button(button, pressed))
+        {
+            current_mode = MODE(byte(button-1) % byte(MODE::LEN));
+            // update the current_mode in the EEPROM
+            EEPROM.update(EEPROM_address, byte(current_mode));
+        }
     }
 }
 
@@ -524,7 +550,7 @@ void standby_mode()
     drawLine(0, PIXEL_COUNT, 0);
 
     //Theatre-style crawling lights with rainbow effect
-    for (int i=0; i < strip.numPixels(); i=i+3) {
+    for (uint16_t i=0; i < strip.numPixels(); i=i+3) {
         uint32_t c = Wheel( (i+color) % 255 );
         strip.setPixelColor(i+q, c);    //turn every third pixel on
         strip.setPixelColor(i+q+1, c);    //turn every third pixel on
@@ -642,16 +668,8 @@ uint32_t Wheel(byte WheelPos)
     }
 }
 
-void switch_colors()
+void update_weights(uint32_t color0, uint32_t color1, uint32_t color2)
 {
-    color_idx0 = (color_idx0 + 1) % 256;
-    uint16_t color_idx1 = (color_idx0 + 85) % 256;
-    uint16_t color_idx2 = (color_idx0 + 171) % 256;
-
-    uint32_t color0 = Wheel(byte(color_idx0));
-    uint32_t color1 = Wheel(byte(color_idx1));
-    uint32_t color2 = Wheel(byte(color_idx2));
-
     color_weights[0] = (color0 >> 16) & 0xff;
     color_weights[1] = (color0 >> 8) & 0xff;
     color_weights[2] = (color0 >> 0) & 0xff;
@@ -661,4 +679,18 @@ void switch_colors()
     color_weights[6] = (color2 >> 16) & 0xff;
     color_weights[7] = (color2 >> 8) & 0xff;
     color_weights[8] = (color2 >> 0) & 0xff;
+}
+
+
+void switch_colors()
+{
+    color_idx0 = (color_idx0 + 1) & 0xff;
+    uint16_t color_idx1 = (color_idx0 + 85) & 0xff;
+    uint16_t color_idx2 = (color_idx0 + 171) & 0xff;
+
+    uint32_t color0 = Wheel(byte(color_idx0));
+    uint32_t color1 = Wheel(byte(color_idx1));
+    uint32_t color2 = Wheel(byte(color_idx2));
+
+    update_weights(color0, color1, color2);
 }
