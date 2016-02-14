@@ -8,7 +8,7 @@
     /* use the serial port */ \
     Serial.begin(9600); \
     /* Serial.begin(115200); */ \
-    while (!Serial) { delay(500); } \
+    /* while (!Serial) { delay(500); } */ \
 }
 
 #define ERROR(err) { \

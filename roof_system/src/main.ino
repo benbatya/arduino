@@ -41,6 +41,12 @@ static const int EEPROM_address = 0;
 #ifndef PIXEL_COUNT
 #   define PIXEL_COUNT 60 // Num of pixels in strip
 #endif
+//
+//
+//static const uint8_t PROGMEM noise[64] = {
+//    0, 0, 0, 0, 1, 2, 2, 1, 2, 2, 2, 1, 2, 1, 2, 1, 0, 0, 2, 2, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1
+//    , 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 2, 2, 1, 0, 0, 0, 0, 0, 1, 2, 2, 1, 0, 0, 0, 0, 0, 0, 1
+//};
 
 uint32_t SWITCH_TIME = 500;
 
@@ -83,6 +89,7 @@ static uint8_t color_weights[9];
 
 void update_weights(uint32_t color0, uint32_t color1, uint32_t color2);
 void switch_colors();
+void eq_setup_mode();
 
 void setup() 
 { 
@@ -101,7 +108,7 @@ void setup()
     randomSeed(analogRead(0));
 
 #ifdef DEBUG 
-    current_mode = MODE::AMP;
+    current_mode = MODE::EQ;
 #else
     if (EEPROM.length() > 0)  // Only try to use EEPROM if there is some on the board
     {
@@ -133,6 +140,7 @@ void setup()
         strip.setPixelColor(0, 0, 0, 255);
         break;
     case MODE::EQ:
+        eq_setup_mode();
         strip.setPixelColor(0, 0, 127, 127);
         break;
     default:
@@ -235,6 +243,15 @@ void loop()
             current_mode = MODE(byte(button-1) % byte(MODE::LEN));
             // update the current_mode in the EEPROM
             EEPROM.update(EEPROM_address, byte(current_mode));
+
+            switch (current_mode) 
+            {
+            case(MODE::EQ):
+                eq_setup_mode();
+                break;
+            default:
+                break;
+            }
         }
     }
 }
@@ -292,7 +309,7 @@ int16_t* sample()
 {
     for (int i = 0; i < FFT_N * 2; i += 2) // save FFT_N samples
     {
-        static const int16_t noiseThreshold = 4;
+        static const int16_t noiseThreshold = 6;
         int16_t k = analogRead(MIC_PIN);
         k = ((k > (512-noiseThreshold)) &&
              (k < (512+noiseThreshold))) ? 0 :
@@ -370,7 +387,7 @@ uint32_t amp_to_color()
     uint16_t w = max_val - min_val;
 
     //Scale the input logarithmically instead of linearly
-    w = fscale(1000, 32000, 0, 255, w, 2);
+    w = fscale(1200, 32000, 0, 255, w, 2);
 
 #if 0 // DEBUG
     uint16_t new_time = millis();
@@ -471,34 +488,42 @@ void vu_mode()
     }
 }
 
-void eq_mode()
-{
-    uint8_t* output = calc_fft_input();
+static uint16_t eq_pixels[PIXEL_COUNT];
 
-    static uint16_t pixels[PIXEL_COUNT];
+void eq_setup_mode()
+{
     // Clear the pixel values
     for (int i=0; i<PIXEL_COUNT; i++)
     {
-        pixels[i] = 0;
+        eq_pixels[i] = 0;
     }
+}
+
+
+void eq_mode()
+{
+    uint8_t* output = calc_fft_input();
 
     // This maps the bands to the pixels
 #if PIXEL_COUNT == 60
     static const uint8_t FREQ_PER_PIXEL[3] = {1, 1, 1};
     static const uint8_t BAND_PIXEL_END[3] = {19, 51, 59};
 #else
-    static const uint8_t FREQ_PER_PIXEL[3] = {8, 8, 8};
-    static const uint8_t BAND_PIXEL_END[3] = {3, 13, 15};
+    // THIS is NOT tuned YET!
+//  static const uint8_t FREQ_PER_PIXEL[3] = {8, 8, 8};
+//  static const uint8_t BAND_PIXEL_END[3] = {3, 13, 15};
 #endif
 
     uint8_t band = 0;
     uint8_t freq = 0;
     for (uint8_t current_pixel=0; current_pixel<PIXEL_COUNT; current_pixel++) 
     {
+        eq_pixels[current_pixel] = (uint32_t(eq_pixels[current_pixel]) * 15) / 16;
+
         for (int j=0; j<FREQ_PER_PIXEL[band]; j++) 
         {
             uint8_t val = output[freq];
-            pixels[current_pixel] += GEA(val, 7, GEA(val, 6, GEA(val, 5, GEA(val, 4, GEA(val, 3, GEA(val, 2, GEA(val, 1, 0)))))));
+            eq_pixels[current_pixel] += GEA(val, 7, GEA(val, 6, GEA(val, 5, GEA(val, 4, GEA(val, 3, GEA(val, 2, GEA(val, 1, 0)))))));
             freq++;
         }
 
@@ -511,11 +536,11 @@ void eq_mode()
     band = 0;
     for (uint8_t i=0; i<PIXEL_COUNT; i++) 
     {
-        uint16_t val = pixels[i];
+        uint16_t val = eq_pixels[i];
 
-        uint16_t r = (val*color_weights[band*3+0]) >> (8-4);
-        uint16_t g = (val*color_weights[band*3+1]) >> (8-4);
-        uint16_t b = (val*color_weights[band*3+2]) >> (8-4);
+        uint16_t r = (val*color_weights[band*3+0]) >> (8-5);
+        uint16_t g = (val*color_weights[band*3+1]) >> (8-5);
+        uint16_t b = (val*color_weights[band*3+2]) >> (8-5);
         strip.setPixelColor(i, uint8_t(r), uint8_t(g), uint8_t(b));
 
         if (i >= BAND_PIXEL_END[band])
