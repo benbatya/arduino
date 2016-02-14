@@ -133,32 +133,39 @@ void ble_setup()
         ASSERTM(ret, F("Couldn't factory reset"));
     }
     
-#if DEBUG
+    PRINT(F("Setting the fort name to 'Cool Fort Lights'"));
+    ble.sendCommandCheckOK(F("AT+GAPDEVNAME=Cool Fort Lights"));
+
     /* Disable command echo from Bluefruit */
     ble.echo(false); 
     
     PRINT("Requesting Bluefruit info:"); 
+
+#if DEBUG
     /* Print Bluefruit information */
     ble.info(); 
-    
+#endif
     PRINT(F("Please use Adafruit Bluefruit LE app to connect in Controller mode")); 
     
     ble.verbose(false);  // debug info is a little annoying after this point!
-#endif
 }
 
 bool ble_update()
 {
     if (!ble.isConnected()) 
     {
-        is_connected = false;
+        if (is_connected) 
+        {
+            PRINT(F("BLE is disconnected.") );
+        }
+        is_connected = false; 
         ble.disconnect();
         return false;
     }
 
     if (!is_connected) 
     {
-        PRINT(F("BLE connected. Switching to DATA mode!") );
+        PRINT(F("BLE is connected. Switching to DATA mode!") );
         ble.setMode(BLUEFRUIT_MODE_DATA);
         is_connected = true;
     }
