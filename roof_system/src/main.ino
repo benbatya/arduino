@@ -79,6 +79,7 @@ static MODE current_mode = MODE::FFT;
 
 // A standby mode if there's no voice input detected for 30 seconds
 static bool in_standby_mode = false;
+static uint32_t standby_mode_color;
 static uint32_t prev_standby_time;
 #define STANDBY_MODE_TIME 30000
 #define STANDBY_TRIGGER_AMOUNT (FFT_N*120)  // Multiplier found empirically
@@ -170,19 +171,28 @@ int16_t* sample();
 
 void loop() 
 {   
-    sample();
 
-    uint32_t total_amp = 0;
-    for (int i=0; i<FFT_N; i++) 
-    {
-        total_amp += abs(fft_input[i*2]);
-    }
+//  uint32_t total_amp = 0;
+//  for (int i=0; i<FFT_N; i++)
+//  {
+//      total_amp += abs(fft_input[i*2]);
+//  }
+//  if (total_amp >= STANDBY_TRIGGER_AMOUNT)
+//  {
+//      prev_standby_time = new_time;
+//      in_standby_mode = false;
+//  } else if(!in_standby_mode && (new_time - prev_standby_time > STANDBY_MODE_TIME))
+//  {
+//      in_standby_mode = true;
+//  }
 
     if (in_standby_mode) 
     {
         standby_mode();
     } else
     {
+        sample();
+
         switch (current_mode) 
         {
         case MODE::FFT:
@@ -205,8 +215,8 @@ void loop()
 
     uint16_t new_time = millis();
 
-    // Switch every SWITCH_TIME
-    if ((new_time - prev_time) > SWITCH_TIME)
+    // Switch every SWITCH_TIME if not in standby mode
+    if ((new_time - prev_time) > SWITCH_TIME && !in_standby_mode)
     {
         switch_colors();
 
@@ -216,30 +226,21 @@ void loop()
 //      PRINT(total_amp);
     }
 
-    if (total_amp >= STANDBY_TRIGGER_AMOUNT) 
-    {
-        prev_standby_time = new_time;
-        in_standby_mode = false;
-    } else if(!in_standby_mode && (new_time - prev_standby_time > STANDBY_MODE_TIME))
-    {
-        in_standby_mode = true;
-    }
-
     if( ble_update() )
     {
         uint32_t color;
         if (ble_get_color(color)) 
         {
-            update_weights(color, color, color);
-
-            SWITCH_TIME = 0xffffffff; // never switch
-            prev_time = new_time;
+            in_standby_mode = true;
+            standby_mode_color = color;
         } 
 
         uint8_t button;
         bool pressed;
         if(ble_get_button(button, pressed))
         {
+            in_standby_mode = false;
+
             current_mode = MODE(byte(button-1) % byte(MODE::LEN));
             // update the current_mode in the EEPROM
             EEPROM.update(EEPROM_address, byte(current_mode));
@@ -566,23 +567,28 @@ void eq_mode()
 
 void standby_mode()
 {
-    static const uint16_t wait = 50;
-    static uint8_t q = 0;
-    static uint8_t color = 0;
+//  static const uint16_t wait = 50;
+//  static uint8_t q = 0;
+//  static uint8_t color = 0;
+//
+//  delay(wait);
+//
+//  drawLine(0, PIXEL_COUNT, 0);
+//
+//  //Theatre-style crawling lights with rainbow effect
+//  for (uint16_t i=0; i < strip.numPixels(); i=i+3) {
+//      uint32_t c = Wheel( (i+color) % 255 );
+//      strip.setPixelColor(i+q, c);    //turn every third pixel on
+//      strip.setPixelColor(i+q+1, c);    //turn every third pixel on
+//  }
+//
+//  q = (q+1) % 3;
+//  color = (color+1);
 
-    delay(wait);
+    for (uint16_t i=0; i < strip.numPixels(); i++) {
+        strip.setPixelColor(i, standby_mode_color);
+    }
 
-    drawLine(0, PIXEL_COUNT, 0);
-
-    //Theatre-style crawling lights with rainbow effect
-    for (uint16_t i=0; i < strip.numPixels(); i=i+3) {
-        uint32_t c = Wheel( (i+color) % 255 );
-        strip.setPixelColor(i+q, c);    //turn every third pixel on
-        strip.setPixelColor(i+q+1, c);    //turn every third pixel on
-    } 
-   
-    q = (q+1) % 3;
-    color = (color+1);
 }
 
 //Used to draw a line between two points of a given color
