@@ -24,7 +24,8 @@
 #include <Adafruit_NeoPixel.h>
 
 #include <EEPROM.h>
-static const int EEPROM_address = 0;
+#define EEPROM_mode_address 0
+#define EEPROM_brightness_address 1
 
 #include "BluefruitConfig.h"
 
@@ -87,9 +88,10 @@ static uint32_t prev_standby_time;
 static uint32_t prev_time;
 static uint16_t color_idx0;
 static uint8_t color_weights[9];
+#define BRIGHTNESS_INC      16
+static uint8_t brightness = 127;
 
-void update_weights(uint32_t color0, uint32_t color1, uint32_t color2);
-void switch_colors();
+void switch_colors(int16_t inc = 1);
 void eq_setup_mode();
 
 void setup() 
@@ -114,13 +116,15 @@ void setup()
     if (EEPROM.length() > 0)  // Only try to use EEPROM if there is some on the board
     {
         // Get the previous mode. If it's valid, set current_mode the next mode % MODE::LEN
-        MODE value = MODE(EEPROM.read(EEPROM_address));
+        MODE value = MODE(EEPROM.read(EEPROM_mode_address));
         if (MODE::MIN <= value && value <= MODE::MAX) 
         {
             current_mode = MODE((uint8_t(value)+1) % uint8_t(MODE::LEN));
         }
 
-        EEPROM.update(EEPROM_address, byte(current_mode));
+        EEPROM.update(EEPROM_mode_address, byte(current_mode));
+
+        brightness = EEPROM.read(EEPROM_brightness_address);
     }
 
 #endif
@@ -149,7 +153,7 @@ void setup()
     }
 
     // Drop the brightness by half
-    strip.setBrightness(127);
+    strip.setBrightness(brightness);
     strip.show();
     delay(2000);
 
@@ -210,6 +214,8 @@ void loop()
         }
     }
 
+    strip.setBrightness(brightness);
+
     // Show the strip
     strip.show();     
 
@@ -239,19 +245,47 @@ void loop()
         bool pressed;
         if(ble_get_button(button, pressed))
         {
-            in_standby_mode = false;
-
-            current_mode = MODE(byte(button-1) % byte(MODE::LEN));
-            // update the current_mode in the EEPROM
-            EEPROM.update(EEPROM_address, byte(current_mode));
-
-            switch (current_mode) 
+            // React on the release only
+            if (!pressed) 
             {
-            case(MODE::EQ):
-                eq_setup_mode();
-                break;
-            default:
-                break;
+                if (1 <= button && button <= 4) 
+                {
+                    in_standby_mode = false;
+
+                    current_mode = MODE(byte(button-1) % byte(MODE::LEN));
+                    // update the current_mode in the EEPROM
+                    EEPROM.update(EEPROM_mode_address, byte(current_mode));
+
+                    switch (current_mode) 
+                    {
+                    case(MODE::EQ):
+                        eq_setup_mode();
+                        break;
+                    default:
+                        break;
+                    }
+                } else if(button == 5) // up
+                {
+                    if (brightness < (255-BRIGHTNESS_INC)) 
+                    {
+                        brightness += BRIGHTNESS_INC; 
+                    }
+                    EEPROM.update(EEPROM_brightness_address, byte(brightness));
+                } else if(button == 6) // down
+                {
+                    if (brightness > BRIGHTNESS_INC) 
+                    {
+                        brightness -= BRIGHTNESS_INC; 
+                    }
+                    EEPROM.update(EEPROM_brightness_address, byte(brightness));
+                } else if(button == 7) // left
+                {
+                    switch_colors(-16);
+                } else if(button == 8) // right
+                {
+                    switch_colors(16);
+                    prev_time = new_time;
+                }
             }
         }
     }
@@ -712,10 +746,9 @@ void update_weights(uint32_t color0, uint32_t color1, uint32_t color2)
     color_weights[8] = (color2 >> 0) & 0xff;
 }
 
-
-void switch_colors()
+void switch_colors(int16_t inc)
 {
-    color_idx0 = (color_idx0 + 1) & 0xff;
+    color_idx0 = (int16_t(color_idx0) + inc) & 0xff;
     uint16_t color_idx1 = (color_idx0 + 85) & 0xff;
     uint16_t color_idx2 = (color_idx0 + 171) & 0xff;
 

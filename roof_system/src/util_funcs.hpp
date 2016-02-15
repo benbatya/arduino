@@ -1,6 +1,6 @@
 #pragma once
 
-#define DEBUG 1
+//#define DEBUG 1
 
 #if DEBUG
 
@@ -32,7 +32,7 @@
 #define CONFIG() { }
 #define ERROR(msg) { }
 #define PRINT(msg) { }
-#define ASSERTM(exp, msg) (exp)
+#define ASSERTM(exp, msg) (void)(exp)
 
 #endif
 
