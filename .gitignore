@@ -1,4 +1,5 @@
 .pioenvs
 *.vtg 
 *.vpwhistu 
+lib/
 .travis.yml
