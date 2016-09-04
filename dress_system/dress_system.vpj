@@ -9,7 +9,7 @@
         Type="gnuc"
         DebugCallbackName="gdb"
         Version="1"
-        OutputFile="%bdroof_system"
+        OutputFile="%bddress_system"
         CompilerConfigName="Latest Version">
         <Menu>
             <Target
@@ -103,7 +103,7 @@
         Type="gnuc"
         DebugCallbackName="gdb"
         Version="1"
-        OutputFile="%bdroof_system"
+        OutputFile="%bddress_system"
         CompilerConfigName="Latest Version">
         <Menu>
             <Target
@@ -205,6 +205,7 @@
             <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BLE.h"/>
             <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BluefruitLE_SPI.h"/>
             <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BluefruitLE_UART.h"/>
+            <F N="lib/Adafruit_LSM303/Adafruit_LSM303.h"/>
             <F N="../lib/Adafruit_NeoPixel/Adafruit_NeoPixel.h"/>
             <F N="src/BluefruitConfig.h"/>
             <F N="../lib/FFT/FFT.h"/>
@@ -216,6 +217,7 @@
             <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BLE.cpp"/>
             <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BluefruitLE_SPI.cpp"/>
             <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BluefruitLE_UART.cpp"/>
+            <F N="lib/Adafruit_LSM303/Adafruit_LSM303.cpp"/>
         </Folder>
         <Folder
             Name="Bitmaps"

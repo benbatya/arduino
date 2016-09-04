@@ -33,6 +33,14 @@
 
 #include "util_funcs.hpp"
 
+// Includes for LSM303 functionality
+#include <Wire.h>
+//#include <Adafruit_Sensor.h>
+#include <Adafruit_LSM303.h>
+
+Adafruit_LSM303 lsm;
+// 
+
 #ifndef MIC_PIN
 #   define MIC_PIN 2
 #endif
@@ -172,6 +180,11 @@ void setup()
     
     // Init the color weights
 //  switch_colors();
+
+    // Try to initialise and warn if we couldn't detect the chip
+    bool lsmSetup = lsm.begin();
+    ASSERTM(lsmSetup, "Oops ... unable to initialize the LSM303. Check your wiring!");
+
     PRINT("Setup done");
 }
 
@@ -191,19 +204,28 @@ void set_color(byte color_idx);
 
 void loop() 
 {
-    delay(10);
-    g_color_idx++;
+//  delay(10);
+//  g_color_idx++;
+//
+//  if (g_color_idx > 255)
+//  {
+//      g_color_idx=0;
+//  }
+//  rainbow_mode(64);
+//
+//  strip.setBrightness(g_brightness);
+//
+//  // Show the strip
+//  strip.show();
 
-    if (g_color_idx > 255)
-    {
-        g_color_idx=0;
-    }
-    rainbow_mode(64);
-
-    strip.setBrightness(g_brightness);
-
-    // Show the strip
-    strip.show();
+    lsm.read();
+    Serial.print("Accel X: "); Serial.print((int)lsm.accelData.x); Serial.print(" ");
+    Serial.print("Y: "); Serial.print((int)lsm.accelData.y);       Serial.print(" ");
+    Serial.print("Z: "); Serial.println((int)lsm.accelData.z);     Serial.print(" ");
+    Serial.print("Mag X: "); Serial.print((int)lsm.magData.x);     Serial.print(" ");
+    Serial.print("Y: "); Serial.print((int)lsm.magData.y);         Serial.print(" ");
+    Serial.print("Z: "); Serial.println((int)lsm.magData.z);       Serial.print(" ");
+    delay(1000);
 }
 
 void standby_mode()
