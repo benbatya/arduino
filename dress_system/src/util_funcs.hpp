@@ -7,8 +7,8 @@
 #define CONFIG() { \
     /* use the serial port */ \
     Serial.begin(9600); \
-    /* Serial.begin(115200); */ \
-    /* while (!Serial) { delay(100); */ \
+    Serial.begin(115200); \
+    while (!Serial) { delay(100); } \
 }
 
 #define ERROR(err) { \

@@ -205,7 +205,8 @@
             <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BLE.h"/>
             <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BluefruitLE_SPI.h"/>
             <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BluefruitLE_UART.h"/>
-            <F N="lib/Adafruit_LSM303/Adafruit_LSM303.h"/>
+            <F N="lib/Adafruit_LSM303DLHC/Adafruit_LSM303.h"/>
+            <F N="lib/Adafruit_LSM303DLHC/Adafruit_LSM303_U.h"/>
             <F N="../lib/Adafruit_NeoPixel/Adafruit_NeoPixel.h"/>
             <F N="src/BluefruitConfig.h"/>
             <F N="../lib/FFT/FFT.h"/>
@@ -217,7 +218,7 @@
             <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BLE.cpp"/>
             <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BluefruitLE_SPI.cpp"/>
             <F N="../ble_example/lib/Adafruit_BluefruitLE_nRF51/Adafruit_BluefruitLE_UART.cpp"/>
-            <F N="lib/Adafruit_LSM303/Adafruit_LSM303.cpp"/>
+            <F N="lib/Adafruit_LSM303DLHC/Adafruit_LSM303_U.cpp"/>
         </Folder>
         <Folder
             Name="Bitmaps"
