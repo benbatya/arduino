@@ -224,7 +224,20 @@ void loop()
     Serial.print("Z: "); Serial.println((int)lsm.accelData.z);     Serial.print(" ");
     Serial.print("Mag X: "); Serial.print((int)lsm.magData.x);     Serial.print(" ");
     Serial.print("Y: "); Serial.print((int)lsm.magData.y);         Serial.print(" ");
-    Serial.print("Z: "); Serial.println((int)lsm.magData.z);       Serial.print(" ");
+    Serial.print("Z: "); Serial.println((int)lsm.magData.z);  Serial.print(" ");
+
+    // From https://learn.adafruit.com/lsm303-accelerometer-slash-compass-breakout/coding
+    const float Pi = 3.14159;
+    float heading = (atan2(lsm.magData.y, lsm.magData.x) * 180) / Pi;
+  
+    // Normalize to 0-360
+    if (heading < 0)
+    {
+        heading = 360 + heading;
+    }
+    Serial.print("Compass Heading: ");
+    Serial.println(heading);
+
     delay(1000);
 }
 
