@@ -71,8 +71,8 @@ typedef struct {
 CHAIN_DATA_t CHAIN_DATA[] = {
 { 10, 5 },
 { 11, 5 },
-{ 12, 4 },
-{ 13, 4 }
+{ 6,  5 },
+{ 12, 4 }
 };
 
 #define NUM_CHAINS (sizeof(CHAIN_DATA) / sizeof(CHAIN_DATA[0]))
