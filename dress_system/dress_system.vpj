@@ -208,6 +208,7 @@
             <F N="lib/Adafruit_LSM303DLHC/Adafruit_LSM303.h"/>
             <F N="lib/Adafruit_LSM303DLHC/Adafruit_LSM303_U.h"/>
             <F N="../lib/Adafruit_NeoPixel/Adafruit_NeoPixel.h"/>
+            <F N="lib/Adafruit_Sensor/Adafruit_Sensor.h"/>
             <F N="src/BluefruitConfig.h"/>
             <F N="../lib/FFT/FFT.h"/>
             <F N="src/util_funcs.hpp"/>
