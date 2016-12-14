@@ -133,8 +133,8 @@ void ble_setup()
         ASSERTM(ret, F("Couldn't factory reset"));
     }
     
-    PRINT(F("Setting the fort name to 'Fun Fort Lights'"));
-    ble.sendCommandCheckOK(F("AT+GAPDEVNAME=Fun Fort Lights"));
+    PRINT(F("Setting the fort name to 'Sparkles'"));
+    ble.sendCommandCheckOK(F("AT+GAPDEVNAME=Sparkles"));
 
     /* Disable command echo from Bluefruit */
     ble.echo(false); 

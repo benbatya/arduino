@@ -22,7 +22,7 @@
 //#error "This is invalid!!"
 //#endif
 
-
+#include <math.h>
 
 #include <Adafruit_NeoPixel.h>
 
@@ -110,53 +110,8 @@ static VIZ_MODE g_mode = VIZ_MODE::STANDBY;
 
 static byte g_color_idx;                // << The current color value
 
-static uint8_t g_brightness = 255;      // << the current brightness
-
 
 sensors_vec_t prev_reading;
-
-void setup() 
-{ 
-    CONFIG(); 
-    
-    // Change the prescaler to get a better sampling rate
-//  ADCSRA &= ~0x07;
-//  ADCSRA |= _BV(ADPS2) | _BV(ADPS0); // prescaler = 32
-    
-//  analogReference(DEFAULT);
-    
-    for (uint8_t i=0; i<NUM_CHAINS; i++) 
-    {
-        g_strip[i] = Adafruit_NeoPixel(CHAIN_DATA[i].count, CHAIN_DATA[i].pin, NEO_GRB + NEO_KHZ800); 
-        g_strip[i].begin();
-        g_strip[i].show();
-    }
-    
-    // Seed with random
-    randomSeed(analogRead(0));
-    
-    // Initialize the brightness and color
-    g_brightness = 255; 
-    g_color_idx = 0; 
-    
-    // Setup the ble
-    ble_setup();
-    
-    /* Initialise the sensor */
-    if(!accel.begin())
-    {
-      /* There was a problem detecting the ADXL345 ... check your connections */
-      Serial.println("Ooops, no LSM303 detected ... Check your wiring!");
-      while(1);
-    }
-
-    /* Display some basic information on this sensor */
-    displaySensorDetails();
-
-//  PRINT("Setup done");
-
-    memset(&prev_reading, sizeof(prev_reading), 0);
-}
 
 void get_delta_acceleration(sensors_vec_t* delta)
 {
@@ -170,9 +125,20 @@ void get_delta_acceleration(sensors_vec_t* delta)
 //  Serial.print("Z: "); Serial.print(event.acceleration.z); Serial.print("  ");Serial.println("m/s^2 ");
 
     for(int i=0; i<3; i++) {
-        delta->v[i] = prev_reading.v[i] - event.acceleration.v[i];
+        float val = prev_reading.v[i] - event.acceleration.v[i];
         prev_reading.v[i] = event.acceleration.v[i];
+
+        val = val < 1.0f ? 1.0f : val;
+
+        val = log(val);
+
+        val = val > 4.0f ? 4.0f : val;
+
+        delta->v[i] = val; 
+//      Serial.print(delta_accel.v[i]); Serial.print(", ");
     }
+//  Serial.println("");
+
 //  Serial.print("DeltaX: "); Serial.print(delta.x); Serial.print("  ");
 //  Serial.print("DeltaY: "); Serial.print(delta.y); Serial.print("  ");
 //  Serial.print("DeltaZ: "); Serial.print(delta.z); Serial.print("  ");Serial.println("m/s^2 ");
@@ -190,7 +156,7 @@ void start_standby_mode()
         {
             strip.setPixelColor(j, STANDBY_MODE_COLOR);
         }
-    //  strip.setBrightness(0);
+//      strip.setBrightness(g_brightness);
         strip.show();
     }
 }
@@ -236,6 +202,11 @@ void rainbow_mode(Adafruit_NeoPixel& strip)
     }
 }
 
+void start_rainbow_mode()
+{
+    g_color_idx=0;
+}
+
 void run_rainbow_mode()
 {
     if (g_color_idx > 255)
@@ -247,7 +218,6 @@ void run_rainbow_mode()
     {
         Adafruit_NeoPixel& strip = g_strip[i];
         rainbow_mode(strip);
-//      g_strip[i].setBrightness(g_brightness);
 
         // Show the strip
         strip.show();
@@ -258,40 +228,48 @@ void run_rainbow_mode()
     delay(100);
 }
 
-typedef struct {
-    byte state;
+typedef struct TWINKLE {
+    uint8_t state;
     // Length of time (in ms) to wait until starting to change color
-    byte sleep_delay;
+    uint8_t sleep_delay;
     // positive means that the pixel is going towards its max brightness
     // negitive means that it is going towards zero
-    byte speed;
+    uint8_t speed;
     // the set color
-    byte target_color[3];
+    uint8_t target_color[3];
     // The maximum brightness to go to
-    byte percentage;
+    uint8_t percentage;
 } TWINKLE_t;
 
 TWINKLE_t g_twinkle_data[NUM_CHAINS][MAX_PIXELS_IN_CHAIN];
 unsigned long g_prev_time;
 
+void gen_twinkle_data(struct TWINKLE& twinkle_data, sensors_vec_t& delta)
+{
+    twinkle_data.state = 0;
+    twinkle_data.sleep_delay = uint8_t(random(100));
+    twinkle_data.speed = uint8_t((random(16)+4));
+    for (uint8_t k=0; k<3; k++)
+    {
+        twinkle_data.target_color[k] = uint8_t(delta.v[k] * 64);
+    }
+    twinkle_data.percentage = 20;
+}
+
 void start_twinkle_mode()
 {
+    sensors_vec_t delta_accel;
+    get_delta_acceleration(&delta_accel);
+
     memset(g_twinkle_data, 0, sizeof(g_twinkle_data));
     // Set the twinkle data to randomish values
-    for (uint8_t i=0; i<NUM_CHAINS; i++) 
+    for (uint8_t i=0; i<NUM_CHAINS; i++)
     {
         Adafruit_NeoPixel& strip = g_strip[i];
-        for (uint8_t j=0; j<strip.numPixels(); j++) 
+        for (uint8_t j=0; j<strip.numPixels(); j++)
         {
             TWINKLE_t& twinkle_data = g_twinkle_data[i][j];
-            twinkle_data.state = 0;
-            twinkle_data.sleep_delay = byte(random(256));
-            twinkle_data.speed = byte(random(8) * 2);
-            for (uint8_t k=0; k<3; k++) 
-            {
-                twinkle_data.target_color[k] = 255; 
-            }
-            twinkle_data.percentage = 0;
+            gen_twinkle_data(twinkle_data, delta_accel);
         }
     }
 
@@ -302,7 +280,7 @@ void run_twinkle_mode()
 {
     unsigned long new_time = millis();
     // The counter has looped so skip this iteration
-    if (new_time < g_prev_time) 
+    if (new_time < g_prev_time)
     {
         g_prev_time = new_time;
         return;
@@ -310,34 +288,94 @@ void run_twinkle_mode()
     unsigned long delta_time = new_time - g_prev_time;
     g_prev_time = new_time;
 
+    sensors_vec_t delta_accel;
+    get_delta_acceleration(&delta_accel);
+//  Serial.print("delta_accel = ");
+//  Serial.print(delta_accel.v[0]); Serial.print(", ");
+//  Serial.print(delta_accel.v[1]); Serial.print(", ");
+//  Serial.println(delta_accel.v[2]);
+
+//  PRINT("run_twinkle_mode: delta =");
+//  PRINT(delta_time);
+
     // update each pixel
-    for (uint8_t i=0; i<NUM_CHAINS; i++) 
+    for (uint8_t i=0; i<NUM_CHAINS; i++)
     {
         Adafruit_NeoPixel& strip = g_strip[i];
-        for (uint8_t j=0; j<strip.numPixels(); j++) 
+        for (uint8_t j=0; j<strip.numPixels(); j++)
         {
             TWINKLE_t& twinkle_data = g_twinkle_data[i][j];
-            switch (twinkle_data.state) 
+            byte color[3];
+
+//          if (!i && !j)
+//          {
+//              Serial.print("Pixel ("); Serial.print(i); Serial.print(", "); Serial.print(j); Serial.print("): state="); Serial.println(twinkle_data.state);
+//          }
+//          Serial.print("")
+            switch (twinkle_data.state)
             {
-            case 0: // The pixel is sleeping 
-                if (delta_time >= twinkle_data.sleep_delay) 
+            case 0: // The pixel is sleeping
+//              if (!i && !j)
+//              {
+//                  Serial.print("sleep_delay="); Serial.println(twinkle_data.sleep_delay);
+//              }
+                if (delta_time >= twinkle_data.sleep_delay)
                 {
-                    twinkle_data.sleep_delay = 0;
+                    twinkle_data.sleep_delay = 0; 
                     twinkle_data.state = 1;
+                    twinkle_data.percentage = 20;
                 } else {
                     twinkle_data.sleep_delay -= delta_time;
                 }
                 strip.setPixelColor(j, 0);
                 break;
             case 1: // The pixel is moving towards its target color
+                
+                for (byte i=0; i<3; i++)
+                {
+                    uint16_t temp = (uint16_t(twinkle_data.percentage-20) * twinkle_data.target_color[i]) / 100;
+                    color[i] = uint8_t(temp);
+                }
+//              if (!i && !j)
+//              {
+//                  Serial.print("percentage="); Serial.println(twinkle_data.percentage);
+//                  Serial.print("color=("); Serial.print(color[0]); Serial.print(","); Serial.print(color[1]); Serial.print(","); Serial.print(color[2]); Serial.println(")");
+//              }
+                strip.setPixelColor(j, color[0], color[1], color[2]);
+                twinkle_data.percentage += twinkle_data.speed;
+                if (twinkle_data.percentage >= 120)
+                {
+                    twinkle_data.percentage = 120;
+                    twinkle_data.state = 2;
+                }
                 break;
-
+            case 2:
+                for (byte i=0; i<3; i++)
+                {
+                    uint16_t temp = (uint16_t(twinkle_data.percentage-20) * twinkle_data.target_color[i]) / 100;
+                    color[i] = uint8_t(temp);
+                }
+//              if (!i && !j)
+//              {
+//                  Serial.print("percentage="); Serial.println(twinkle_data.percentage);
+//                  Serial.print("color=("); Serial.print(color[0]); Serial.print(","); Serial.print(color[1]); Serial.print(","); Serial.print(color[2]); Serial.println(")");
+//              }
+                strip.setPixelColor(j, color[0], color[1], color[2]);
+                twinkle_data.percentage -= twinkle_data.speed;
+                if (twinkle_data.percentage <= 20)
+                {
+                    gen_twinkle_data(twinkle_data, delta_accel);
+                }
+                break;
             default:
                 break;
             }
         }
+
+        // Show the strip
+        strip.show();
     }
-    delay(100);
+//  delay(50);
 }
 
 void run_direction_mode()
@@ -345,6 +383,20 @@ void run_direction_mode()
 
 }
 
+
+#define BRIGHTNESS_INC      8
+
+static uint8_t g_brightness = 127;      // << the current brightness
+
+void set_brightness(byte b)
+{
+    g_brightness = b;
+    for (uint8_t i=0; i<NUM_CHAINS; i++) 
+    {
+        Adafruit_NeoPixel& strip = g_strip[i];
+        strip.setBrightness(g_brightness);
+    }
+}
 
 void handle_ble()
 {
@@ -366,21 +418,80 @@ void handle_ble()
             {
                 if (1 <= button && button <= 4) 
                 {           
-                    g_mode = VIZ_MODE(byte(button - 1) % byte(VIZ_MODE::LEN)); 
-                    
+                    Serial.print("Button pressed = "); Serial.println(button);
+                    g_mode = VIZ_MODE(byte(button - 1) % byte(VIZ_MODE::LEN));
+
                     // Setup the new mode
-                    switch (g_mode) 
+                    switch (g_mode)
                     {
                     case VIZ_MODE::STANDBY: start_standby_mode(); break;
+                    case VIZ_MODE::RAINBOW: start_rainbow_mode(); break;
                     case VIZ_MODE::TWINKLE: start_twinkle_mode(); break;
                     default:
                         break;
                     }
+                }
+                else if (button == 5) // up
+                {
+                    if (g_brightness < (255 - BRIGHTNESS_INC)) 
+                    {
+                        set_brightness(g_brightness + BRIGHTNESS_INC); 
+                    }
                 } 
+                else if (button == 6) // down
+                {
+                    if (g_brightness > BRIGHTNESS_INC) 
+                    {
+                        set_brightness(g_brightness - BRIGHTNESS_INC);
+                    }
+                }  
             }
         }
     }
 }
+
+
+void setup() 
+{ 
+    CONFIG(); 
+    
+    // Change the prescaler to get a better sampling rate
+//  ADCSRA &= ~0x07;
+//  ADCSRA |= _BV(ADPS2) | _BV(ADPS0); // prescaler = 32
+    
+//  analogReference(DEFAULT);
+    
+    for (uint8_t i=0; i<NUM_CHAINS; i++) 
+    {
+        g_strip[i] = Adafruit_NeoPixel(CHAIN_DATA[i].count, CHAIN_DATA[i].pin, NEO_GRB + NEO_KHZ800); 
+        g_strip[i].begin();
+        g_strip[i].show();
+    }
+    
+    // Seed with random
+    randomSeed(analogRead(0));
+    
+    set_brightness(g_brightness);
+
+    // Setup the ble
+    ble_setup();
+    
+    /* Initialise the sensor */
+    if(!accel.begin())
+    {
+      /* There was a problem detecting the ADXL345 ... check your connections */
+      Serial.println("Ooops, no LSM303 detected ... Check your wiring!");
+      while(1);
+    }
+
+    /* Display some basic information on this sensor */
+    displaySensorDetails();
+
+//  PRINT("Setup done");
+
+    memset(&prev_reading, sizeof(prev_reading), 0);
+}
+
 
 void loop() 
 {
@@ -391,7 +502,7 @@ void loop()
     case VIZ_MODE::STANDBY: run_standby_mode(); break;
     case VIZ_MODE::RAINBOW: run_rainbow_mode(); break;
     case VIZ_MODE::TWINKLE: run_twinkle_mode(); break;
-    case VIZ_MODE::DIRECTION: run_direction_mode(); break;
+//  case VIZ_MODE::DIRECTION: run_direction_mode(); break;
     default:
         break;
 
