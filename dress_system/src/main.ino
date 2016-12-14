@@ -226,6 +226,7 @@ void update_colors()
         count = 0;
         switch_colors(10);
     }
+    count += 1;
 }
 
 void set_color(byte color_idx)
