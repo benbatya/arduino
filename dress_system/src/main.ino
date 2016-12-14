@@ -71,13 +71,15 @@ typedef struct {
 #define MAX_PIXELS_IN_CHAIN 5
 
 CHAIN_DATA_t CHAIN_DATA[] = {
+{ 6,  5 },
 { 10, 5 },
 { 11, 5 },
-{ 6,  5 },
 { 12, 4 }
 };
 
 #define NUM_CHAINS (sizeof(CHAIN_DATA) / sizeof(CHAIN_DATA[0]))
+
+#define BACK_CHAIN 0
 
 uint32_t SWITCH_TIME = 500; 
 
@@ -187,6 +189,44 @@ uint32_t Wheel(byte WheelPos)
     }
 }
 
+static uint8_t color_weights[9]; 
+
+void update_weights(uint32_t color0, uint32_t color1, uint32_t color2) 
+{ 
+    color_weights[0] = (color0 >> 16) & 0xff; 
+    color_weights[1] = (color0 >> 8) & 0xff; 
+    color_weights[2] = (color0 >> 0) & 0xff; 
+    color_weights[3] = (color1 >> 16) & 0xff; 
+    color_weights[4] = (color1 >> 8) & 0xff; 
+    color_weights[5] = (color1 >> 0) & 0xff; 
+    color_weights[6] = (color2 >> 16) & 0xff; 
+    color_weights[7] = (color2 >> 8) & 0xff; 
+    color_weights[8] = (color2 >> 0) & 0xff;
+}
+
+void switch_colors(int16_t inc) 
+{ 
+    set_color(byte(inc + g_color_idx)); 
+    // NOTE: this may not work right!!
+    byte color_idx1 = (g_color_idx + 85); 
+    byte color_idx2 = (g_color_idx + 171); 
+    
+    uint32_t color0 = Wheel(g_color_idx); 
+    uint32_t color1 = Wheel(color_idx1); 
+    uint32_t color2 = Wheel(color_idx2); 
+    
+    update_weights(color0, color1, color2);
+}
+
+void update_colors()
+{
+    static uint8_t count = 0;
+    if (count < 30) 
+    {
+        count = 0;
+        switch_colors(10);
+    }
+}
 
 void set_color(byte color_idx)
 {
@@ -247,12 +287,17 @@ unsigned long g_prev_time;
 void gen_twinkle_data(struct TWINKLE& twinkle_data, sensors_vec_t& delta)
 {
     twinkle_data.state = 0;
-    twinkle_data.sleep_delay = uint8_t(random(100));
+    twinkle_data.sleep_delay = uint8_t(random(60));
     twinkle_data.speed = uint8_t((random(16)+4));
+    uint16_t bins[3];
     for (uint8_t k=0; k<3; k++)
     {
-        twinkle_data.target_color[k] = uint8_t(delta.v[k] * 64);
+        bins[k] = delta.v[k] * 64;
     }
+    twinkle_data.target_color[0] = (bins[0] * color_weights[0] + bins[1] * color_weights[1] + bins[2] * color_weights[2]) >> 8; 
+    twinkle_data.target_color[1] = (bins[0] * color_weights[3] + bins[1] * color_weights[4] + bins[2] * color_weights[5]) >> 8; 
+    twinkle_data.target_color[2] = (bins[0] * color_weights[6] + bins[1] * color_weights[7] + bins[2] * color_weights[8]) >> 8; 
+
     twinkle_data.percentage = 20;
 }
 
@@ -287,6 +332,8 @@ void run_twinkle_mode()
     }
     unsigned long delta_time = new_time - g_prev_time;
     g_prev_time = new_time;
+
+    update_colors();
 
     sensors_vec_t delta_accel;
     get_delta_acceleration(&delta_accel);
@@ -375,14 +422,14 @@ void run_twinkle_mode()
         // Show the strip
         strip.show();
     }
-//  delay(50);
+    delay(25);
 }
 
-void run_direction_mode()
-{
-
-}
-
+//void run_direction_mode()
+//{
+//    sensors_vec_t delta_accel;
+//    get_delta_acceleration(&delta_accel);
+//}
 
 #define BRIGHTNESS_INC      8
 
@@ -427,6 +474,7 @@ void handle_ble()
                     case VIZ_MODE::STANDBY: start_standby_mode(); break;
                     case VIZ_MODE::RAINBOW: start_rainbow_mode(); break;
                     case VIZ_MODE::TWINKLE: start_twinkle_mode(); break;
+//                  case VIZ_MODE::DIRECTION: start_twinkle_mode(); break;
                     default:
                         break;
                     }
