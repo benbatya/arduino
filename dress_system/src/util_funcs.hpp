@@ -9,7 +9,7 @@
     Serial.begin(9600); \
     Serial.begin(115200); \
 }
-//  while (!Serial) { delay(100); } \
+//  while (!Serial) { delay(100); } 
 //}
 
 #define ERROR(err) { \
