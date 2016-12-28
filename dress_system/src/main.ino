@@ -273,6 +273,7 @@ enum class TWINKLE_STATE : byte
     ACENDING = 0,
     DECENDING = 1,
     SLEEP = 2,
+    THRESHOLD = 3,
     LEN, 
     
     MIN = ACENDING,
@@ -417,12 +418,18 @@ void run_twinkle_mode()
 //              }
                 if (twinkle_data.sleep_delay <= delta_time)
                 {
+                    // twinkle_data.state = TWINKLE_STATE::THRESHOLD;
                     gen_twinkle_data(twinkle_data, delta_accel);
                 } else {
                     twinkle_data.sleep_delay -= delta_time;
                 }
                 strip.setPixelColor(j, 0);
                 break;
+//          case TWINKLE_STATE::THRESHOLD:
+//              if ()
+//              {
+//              }
+
             default:
                 break;
             }
