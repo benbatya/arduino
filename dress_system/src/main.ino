@@ -207,7 +207,6 @@ void update_weights(uint32_t color0, uint32_t color1, uint32_t color2)
 void switch_colors(int16_t inc) 
 { 
     set_color(byte(inc + g_color_idx)); 
-    // NOTE: this may not work right!!
     byte color_idx1 = (g_color_idx + 85); 
     byte color_idx2 = (g_color_idx + 171); 
     
@@ -269,8 +268,19 @@ void run_rainbow_mode()
     delay(100);
 }
 
+enum class TWINKLE_STATE : byte
+{
+    ACENDING = 0,
+    DECENDING = 1,
+    SLEEP = 2,
+    LEN, 
+    
+    MIN = ACENDING,
+    MAX = LEN - 1
+}; 
+
 typedef struct TWINKLE {
-    uint8_t state;
+    TWINKLE_STATE state;
     // Length of time (in ms) to wait until starting to change color
     uint8_t sleep_delay;
     // positive means that the pixel is going towards its max brightness
@@ -287,7 +297,7 @@ unsigned long g_prev_time;
 
 void gen_twinkle_data(struct TWINKLE& twinkle_data, sensors_vec_t& delta)
 {
-    twinkle_data.state = 0;
+    twinkle_data.state = TWINKLE_STATE::ACENDING;
     twinkle_data.sleep_delay = uint8_t(random(60));
     twinkle_data.speed = uint8_t((random(16)+4));
     uint16_t bins[3];
@@ -362,22 +372,7 @@ void run_twinkle_mode()
 //          Serial.print("")
             switch (twinkle_data.state)
             {
-            case 0: // The pixel is sleeping
-//              if (!i && !j)
-//              {
-//                  Serial.print("sleep_delay="); Serial.println(twinkle_data.sleep_delay);
-//              }
-                if (delta_time >= twinkle_data.sleep_delay)
-                {
-                    twinkle_data.sleep_delay = 0; 
-                    twinkle_data.state = 1;
-                    twinkle_data.percentage = 20;
-                } else {
-                    twinkle_data.sleep_delay -= delta_time;
-                }
-                strip.setPixelColor(j, 0);
-                break;
-            case 1: // The pixel is moving towards its target color
+            case TWINKLE_STATE::ACENDING: // The pixel is moving towards its target color
                 
                 for (byte i=0; i<3; i++)
                 {
@@ -394,10 +389,10 @@ void run_twinkle_mode()
                 if (twinkle_data.percentage >= 120)
                 {
                     twinkle_data.percentage = 120;
-                    twinkle_data.state = 2;
+                    twinkle_data.state = TWINKLE_STATE::DECENDING;
                 }
                 break;
-            case 2:
+            case TWINKLE_STATE::DECENDING:
                 for (byte i=0; i<3; i++)
                 {
                     uint16_t temp = (uint16_t(twinkle_data.percentage-20) * twinkle_data.target_color[i]) / 100;
@@ -412,8 +407,21 @@ void run_twinkle_mode()
                 twinkle_data.percentage -= twinkle_data.speed;
                 if (twinkle_data.percentage <= 20)
                 {
-                    gen_twinkle_data(twinkle_data, delta_accel);
+                    twinkle_data.state = TWINKLE_STATE::SLEEP;
                 }
+                break;
+            case TWINKLE_STATE::SLEEP: // The pixel is sleeping
+//              if (!i && !j)
+//              {
+//                  Serial.print("sleep_delay="); Serial.println(twinkle_data.sleep_delay);
+//              }
+                if (twinkle_data.sleep_delay <= delta_time)
+                {
+                    gen_twinkle_data(twinkle_data, delta_accel);
+                } else {
+                    twinkle_data.sleep_delay -= delta_time;
+                }
+                strip.setPixelColor(j, 0);
                 break;
             default:
                 break;
