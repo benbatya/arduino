@@ -45,12 +45,12 @@
 
 
 /* Assign a unique ID to this sensor at the same time */
-Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(54321);
+Adafruit_LSM303_Accel_Unified g_accel = Adafruit_LSM303_Accel_Unified(54321);
 
-void displaySensorDetails(void)
+void accel_displaySensorDetails(void)
 {
   sensor_t sensor;
-  accel.getSensor(&sensor);
+  g_accel.getSensor(&sensor);
   Serial.println("------------------------------------");
   Serial.print  ("Sensor:       "); Serial.println(sensor.name);
   Serial.print  ("Driver Ver:   "); Serial.println(sensor.version);
@@ -58,6 +58,24 @@ void displaySensorDetails(void)
   Serial.print  ("Max Value:    "); Serial.print(sensor.max_value); Serial.println(" m/s^2");
   Serial.print  ("Min Value:    "); Serial.print(sensor.min_value); Serial.println(" m/s^2");
   Serial.print  ("Resolution:   "); Serial.print(sensor.resolution); Serial.println(" m/s^2");
+  Serial.println("------------------------------------");
+  Serial.println("");
+  delay(500);
+}
+
+Adafruit_LSM303_Mag_Unified g_mag = Adafruit_LSM303_Mag_Unified(12345);
+
+void mag_displaySensorDetails(void)
+{
+  sensor_t sensor;
+  g_mag.getSensor(&sensor);
+  Serial.println("------------------------------------");
+  Serial.print  ("Sensor:       "); Serial.println(sensor.name);
+  Serial.print  ("Driver Ver:   "); Serial.println(sensor.version);
+  Serial.print  ("Unique ID:    "); Serial.println(sensor.sensor_id);
+  Serial.print  ("Max Value:    "); Serial.print(sensor.max_value); Serial.println(" uT");
+  Serial.print  ("Min Value:    "); Serial.print(sensor.min_value); Serial.println(" uT");
+  Serial.print  ("Resolution:   "); Serial.print(sensor.resolution); Serial.println(" uT");
   Serial.println("------------------------------------");
   Serial.println("");
   delay(500);
@@ -119,7 +137,7 @@ void get_delta_acceleration(sensors_vec_t* delta)
 {
     /* Get a new sensor event */
     sensors_event_t event;
-    accel.getEvent(&event);
+    g_accel.getEvent(&event);
 
     /* Display the results (acceleration is measured in m/s^2) */
 //  Serial.print("X: "); Serial.print(event.acceleration.x); Serial.print("  ");
@@ -146,6 +164,7 @@ void get_delta_acceleration(sensors_vec_t* delta)
 //  Serial.print("DeltaZ: "); Serial.print(delta.z); Serial.print("  ");Serial.println("m/s^2 ");
 
 }
+
 
 #define STANDBY_MODE_COLOR 0 
 void start_standby_mode()
@@ -237,7 +256,7 @@ void set_color(byte color_idx)
 void rainbow_mode(Adafruit_NeoPixel& strip)
 {
     for(uint8_t i=0; i<strip.numPixels(); i++) {
-        uint32_t c = Wheel( i + g_color_idx );
+        uint32_t c = Wheel( i*50 + g_color_idx );
         strip.setPixelColor(i, c);
     }
 }
@@ -441,11 +460,120 @@ void run_twinkle_mode()
     delay(25);
 }
 
-//void run_direction_mode()
-//{
-//    sensors_vec_t delta_accel;
-//    get_delta_acceleration(&delta_accel);
-//}
+
+
+void start_direction_mode()
+{
+    for (uint8_t i=0; i<NUM_CHAINS; i++) 
+    {
+        Adafruit_NeoPixel& strip = g_strip[i];
+
+        for(uint8_t i=0; i<strip.numPixels(); i++) {
+//          uint32_t c = Wheel( i + g_color_idx );
+            strip.setPixelColor(i, 0);
+        }
+
+        // Show the strip
+        strip.show();
+    }
+    
+}
+
+void run_direction_mode()
+{
+    /* Get a new sensor event */
+    sensors_event_t event;
+    g_mag.getEvent(&event);
+
+    /* Display the results (magnetic vector values are in micro-Tesla (uT)) */
+    Serial.print("X: "); Serial.print(event.magnetic.x); Serial.print("  ");
+    Serial.print("Y: "); Serial.print(event.magnetic.y); Serial.print("  ");
+    Serial.print("Z: "); Serial.print(event.magnetic.z); Serial.print("  ");Serial.println("uT");
+
+    /* Note: You can also get the raw (non unified values) for */
+    /* the last data sample as follows. The .getEvent call populates */
+    /* the raw values used below. */
+    // Serial.print("X Raw: "); Serial.print(mag.raw.x); Serial.print("  ");
+    // Serial.print("Y Raw: "); Serial.print(mag.raw.y); Serial.print("  ");
+    // Serial.print("Z Raw: "); Serial.print(mag.raw.z); Serial.println("");
+
+    const float Pi = 3.14159;
+    float heading = (atan2(event.magnetic.z, event.magnetic.x) * 180) / Pi;
+
+    // Normalize to 0-360
+    if (heading < 0)
+    {
+        heading = 360 + heading;
+    }
+    Serial.print("Compass Heading: ");
+    Serial.println(heading);
+
+    float h = heading;
+    float s = 1.0f;
+    float v = 1.0f;
+
+    // Heading maps to Hue, keep Satruation and Value at 1
+    h /= 60.0f;
+
+    float fract = h - floor(h);
+
+    float p = v * (1.0f - s);
+    float q = v * (1.0f - s*fract);
+    float t = v * (1.0f - s*(1.0f - fract));
+
+    float r, g, b;
+
+    if (h < 1.0f) 
+    {
+        r = v;
+        g = t;
+        b = p;
+    } else if(h < 2.0f)
+    {
+        r = q;
+        g = v;
+        b = p;
+    } else if(h < 3.0f)
+    {
+        r = p;
+        g = v;
+        b = t;
+    } else if(h < 4.0f)
+    {
+        r = p;
+        g = q;
+        b = v;
+    } else if(h < 5.0f)
+    {
+        r = t;
+        g = p;
+        b = v;
+    } else {
+        r = v;
+        g = p;
+        b = q;
+    }
+
+    uint8_t R = uint8_t(r*255);
+    uint8_t G = uint8_t(g*255);
+    uint8_t B = uint8_t(b*255);
+
+    for (uint8_t i=0; i<NUM_CHAINS; i++) 
+    {
+        Adafruit_NeoPixel& strip = g_strip[i];
+
+        for(uint8_t i=0; i<strip.numPixels(); i++) {
+//          uint32_t c = Wheel( i + g_color_idx );
+            strip.setPixelColor(i, R, G, B);
+        }
+
+        // Show the strip
+        strip.show();
+    }
+
+    /* Delay before the next sample */
+    delay(100);
+}
 
 #define BRIGHTNESS_INC      8
 
@@ -490,7 +618,7 @@ void handle_ble()
                     case VIZ_MODE::STANDBY: start_standby_mode(); break;
                     case VIZ_MODE::RAINBOW: start_rainbow_mode(); break;
                     case VIZ_MODE::TWINKLE: start_twinkle_mode(); break;
-//                  case VIZ_MODE::DIRECTION: start_twinkle_mode(); break;
+                    case VIZ_MODE::DIRECTION: start_direction_mode(); break;
                     default:
                         break;
                     }
@@ -541,7 +669,7 @@ void setup()
     ble_setup();
     
     /* Initialise the sensor */
-    if(!accel.begin())
+    if(!g_accel.begin())
     {
       /* There was a problem detecting the ADXL345 ... check your connections */
       Serial.println("Ooops, no LSM303 detected ... Check your wiring!");
@@ -549,9 +677,24 @@ void setup()
     }
 
     /* Display some basic information on this sensor */
-    displaySensorDetails();
+    accel_displaySensorDetails();
 
-//  PRINT("Setup done");
+    PRINT("Accel Setup done");
+
+    /* Enable auto-gain */
+    g_mag.enableAutoRange(true);
+
+    if (!g_mag.begin())
+    {
+      /* There was a problem detecting the ADXL345 ... check your connections */
+      Serial.println("Ooops, no LSM303 detected ... Check your wiring!");
+      while(1);
+    }
+
+    /* Display some basic information on this sensor */
+    mag_displaySensorDetails();
+
+    PRINT("MAG setup done");
 
     memset(&prev_reading, sizeof(prev_reading), 0);
 }
@@ -566,7 +709,7 @@ void loop()
     case VIZ_MODE::STANDBY: run_standby_mode(); break;
     case VIZ_MODE::RAINBOW: run_rainbow_mode(); break;
     case VIZ_MODE::TWINKLE: run_twinkle_mode(); break;
-//  case VIZ_MODE::DIRECTION: run_direction_mode(); break;
+    case VIZ_MODE::DIRECTION: run_direction_mode(); break;
     default:
         break;
 
