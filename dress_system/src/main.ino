@@ -256,7 +256,7 @@ void set_color(byte color_idx)
 void rainbow_mode(Adafruit_NeoPixel& strip)
 {
     for(uint8_t i=0; i<strip.numPixels(); i++) {
-        uint32_t c = Wheel( i*50 + g_color_idx );
+        uint32_t c = Wheel( g_color_idx - i*10 );
         strip.setPixelColor(i, c);
     }
 }
@@ -284,7 +284,7 @@ void run_rainbow_mode()
 
     g_color_idx++;
 
-    delay(100);
+    delay(25);
 }
 
 enum class TWINKLE_STATE : byte
@@ -461,6 +461,8 @@ void run_twinkle_mode()
 }
 
 
+uint32_t g_color_queue[MAX_PIXELS_IN_CHAIN];
+uint8_t g_queue_pos = 0;
 
 void start_direction_mode()
 {
@@ -468,15 +470,18 @@ void start_direction_mode()
     {
         Adafruit_NeoPixel& strip = g_strip[i];
 
-        for(uint8_t i=0; i<strip.numPixels(); i++) {
-//          uint32_t c = Wheel( i + g_color_idx );
-            strip.setPixelColor(i, 0);
+        for(uint8_t j=0; j<strip.numPixels(); j++) {
+            strip.setPixelColor(j, 0);
         }
 
         // Show the strip
         strip.show();
     }
-    
+
+    for (uint8_t i=0; i<5; i++) 
+    {
+        g_color_queue[i] = 0;
+    }
 }
 
 void run_direction_mode()
@@ -558,13 +563,23 @@ void run_direction_mode()
     uint8_t G = uint8_t(g*255);
     uint8_t B = uint8_t(b*255);
 
+    uint32_t color = Adafruit_NeoPixel::Color(R, G, B);
+
+    // push all of the colors down by one
+    for (uint8_t i=MAX_PIXELS_IN_CHAIN-1; i>0; i--) 
+    {
+        g_color_queue[i] = g_color_queue[i-1];
+    }
+    g_color_queue[0] = color;
+
+
     for (uint8_t i=0; i<NUM_CHAINS; i++) 
     {
         Adafruit_NeoPixel& strip = g_strip[i];
 
-        for(uint8_t i=0; i<strip.numPixels(); i++) {
-//          uint32_t c = Wheel( i + g_color_idx );
-            strip.setPixelColor(i, R, G, B);
+        for(uint8_t j=0; j<strip.numPixels(); j++) {
+            uint32_t c = g_color_queue[j];
+            strip.setPixelColor(j, c);
         }
 
         // Show the strip
@@ -572,7 +587,7 @@ void run_direction_mode()
     }
 
     /* Delay before the next sample */
-    delay(100);
+    delay(200);
 }
 
 #define BRIGHTNESS_INC      8
