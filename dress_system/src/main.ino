@@ -148,11 +148,11 @@ void get_delta_acceleration(sensors_vec_t* delta)
         float val = prev_reading.v[i] - event.acceleration.v[i];
         prev_reading.v[i] = event.acceleration.v[i];
 
-        val = val < 1.0f ? 1.0f : val;
+        val = val < 0.0f ? 0.0f : val;
 
-        val = log(val);
+//      val = log(val);
 
-        val = val > 4.0f ? 4.0f : val;
+        val = val > 16.0f ? 16.0f : val;
 
         delta->v[i] = val; 
 //      Serial.print(delta_accel.v[i]); Serial.print(", ");
@@ -323,7 +323,7 @@ void gen_twinkle_data(struct TWINKLE& twinkle_data, sensors_vec_t& delta)
     uint16_t bins[3];
     for (uint8_t k=0; k<3; k++)
     {
-        bins[k] = delta.v[k] * 64;
+        bins[k] = uint16_t(delta.v[k]) * 16;
     }
     twinkle_data.target_color[0] = (bins[0] * color_weights[0] + bins[1] * color_weights[1] + bins[2] * color_weights[2]) >> 8; 
     twinkle_data.target_color[1] = (bins[0] * color_weights[3] + bins[1] * color_weights[4] + bins[2] * color_weights[5]) >> 8; 
